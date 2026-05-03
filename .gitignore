@@ -14,3 +14,4 @@ src-tauri/target/
 !.env.example
 artifacts/
 .ace-tool/
+.codex/environments/environment.toml
