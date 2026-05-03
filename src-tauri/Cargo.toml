@@ -3,6 +3,7 @@ name = "clipflow"
 version = "0.1.0"
 description = "ClipFlow clipboard manager"
 authors = ["ClipFlow"]
+license = "Apache-2.0"
 edition = "2021"
 
 [lib]

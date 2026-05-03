@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Activity, Database, Monitor, ShieldCheck } from "lucide-react";
 import { SearchPanel } from "./components/SearchPanel";
-import { SettingsConcepts } from "./components/SettingsConcepts";
 import { SettingsPage } from "./components/SettingsPage";
 import { createDemoClips, defaultSettings } from "./demoData";
 import { routeTransition, routeVariants } from "./domain/motion";
@@ -314,11 +313,7 @@ export function App() {
         variants: routeVariants
       };
 
-  const routeContent = pathname === "/settings-concepts" ? (
-        <motion.div key="settings-concepts" className="route-motion-layer" {...routeMotionProps}>
-          <SettingsConcepts />
-        </motion.div>
-  ) : pathname === "/settings" ? (
+  const routeContent = pathname === "/settings" ? (
         <motion.div key="settings" className="route-motion-layer" {...routeMotionProps}>
       <SettingsPage
         busyLabel={busyLabel}
