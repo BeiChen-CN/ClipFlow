@@ -12,4 +12,4 @@ src-tauri/target/
 .env
 .env.*
 !.env.example
-
+artifacts/
