@@ -30,12 +30,15 @@ use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThre
 pub const CLIPS_CHANGED_EVENT: &str = "clips-changed";
 pub const PANEL_SHOWN_EVENT: &str = "panel-shown";
 pub const SETTINGS_CHANGED_EVENT: &str = "settings-changed";
+const TRAY_ID: &str = "clipflow-tray";
 
 pub fn setup_app(app: &mut App) -> Result<(), Box<dyn Error>> {
     setup_tray(app)?;
     register_stored_panel_hotkey(app.handle());
     apply_stored_panel_pin(app.handle());
     apply_stored_launch_on_startup(app.handle());
+    apply_stored_tray_icon_visibility(app.handle());
+    apply_stored_taskbar_icon_visibility(app.handle());
     start_clipboard_watcher(app.handle().clone());
     start_edge_auto_hide_watcher(app.handle().clone());
     show_panel(app.handle());
@@ -64,6 +67,18 @@ pub fn apply_panel_pinned<R: Runtime>(app: &AppHandle<R>, pinned: bool) {
 
 pub fn apply_launch_on_startup(enabled: bool) -> Result<(), ClipflowError> {
     apply_launch_on_startup_platform(enabled)
+}
+
+pub fn apply_tray_icon_visibility<R: Runtime>(app: &AppHandle<R>, visible: bool) {
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        let _ = tray.set_visible(visible);
+    }
+}
+
+pub fn apply_taskbar_icon_visibility<R: Runtime>(app: &AppHandle<R>, visible: bool) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_skip_taskbar(!visible);
+    }
 }
 
 pub fn hide_panel<R: Runtime>(app: &AppHandle<R>) {
@@ -98,7 +113,7 @@ fn setup_tray(app: &mut App) -> tauri::Result<()> {
     let separator = PredefinedMenuItem::separator(app)?;
     let menu = Menu::with_items(app, &[&show, &pause, &clear, &separator, &quit])?;
 
-    let mut builder = TrayIconBuilder::new()
+    let mut builder = TrayIconBuilder::with_id(TRAY_ID)
         .menu(&menu)
         .show_menu_on_left_click(false)
         .tooltip("ClipFlow")
@@ -147,6 +162,20 @@ fn apply_stored_launch_on_startup<R: Runtime>(app: &AppHandle<R>) {
         return;
     };
     let _ = apply_launch_on_startup(settings.launch_on_startup);
+}
+
+fn apply_stored_tray_icon_visibility<R: Runtime>(app: &AppHandle<R>) {
+    let Some(settings) = read_settings(app) else {
+        return;
+    };
+    apply_tray_icon_visibility(app, settings.show_tray_icon);
+}
+
+fn apply_stored_taskbar_icon_visibility<R: Runtime>(app: &AppHandle<R>) {
+    let Some(settings) = read_settings(app) else {
+        return;
+    };
+    apply_taskbar_icon_visibility(app, settings.show_taskbar_icon);
 }
 
 #[cfg(target_os = "windows")]

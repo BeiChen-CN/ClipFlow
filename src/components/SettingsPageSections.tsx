@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { KeyboardEvent } from "react";
 import {
+  Bell,
   Clipboard,
   Clock3,
   ExternalLink,
@@ -20,6 +21,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { normalizeHexColor, readCustomColor } from "../domain/theme";
 import type {
+  ClipItem,
   ColorPreset,
   MousePasteTrigger,
   OptionalClipFilter,
@@ -29,17 +31,23 @@ import type {
   SettingsShortcuts,
   WindowPositionMode
 } from "../domain/types";
+import { ClipRow } from "./SearchPanelParts";
 import { InfoRow, NumberRow, RowTitle, SelectRow, SwitchRow } from "./SettingsPageRows";
 
-type SectionId = "clipboard" | "history" | "general" | "hotkeys" | "about";
+type SectionId = "clipboard" | "history" | "trash" | "general" | "hotkeys" | "about";
 type UpdateSettings = (patch: SettingsPatch) => void | Promise<void>;
 type PageAction = () => void | Promise<void>;
+type ClipAction = (id: string) => void | Promise<void>;
 
 export interface SettingsContentProps {
   activeId: SectionId;
+  clips: ClipItem[];
   clipsCount: number;
   settings: Settings;
   onClearHistory?: PageAction;
+  onConfirmDestructiveAction?: (message: string) => Promise<boolean>;
+  onPermanentlyDeleteClip?: ClipAction;
+  onRestoreClip?: ClipAction;
   onUpdateSettings: UpdateSettings;
 }
 
@@ -57,7 +65,7 @@ const colorOptions: Array<{ id: ColorPreset; label: string; swatch: string }> = 
 const shortcutRows: Array<{ key: keyof SettingsShortcuts; label: string; description: string }> = [
   { key: "showPanel", label: "呼出面板", description: "打开 ClipFlow 主面板" },
   { key: "pasteSelected", label: "粘贴选中", description: "把当前选中项粘贴到前台窗口" },
-  { key: "copySelected", label: "复制选中", description: "只复制，不立即粘贴" },
+  { key: "copySelected", label: "复制选中", description: "只复制，不立刻粘贴" },
   { key: "deleteSelected", label: "删除选中", description: "删除当前选中历史" },
   { key: "nextItem", label: "下一项", description: "移动到下一条历史" },
   { key: "previousItem", label: "上一项", description: "移动到上一条历史" }
@@ -84,24 +92,24 @@ const optionalFilterOptions: Array<{ id: OptionalClipFilter; label: string }> = 
   { id: "link", label: "链接" },
   { id: "code", label: "代码" },
   { id: "richText", label: "富文本" },
-  { id: "recent", label: "最近使用" },
-  { id: "trash", label: "回收站" }
+  { id: "recent", label: "最近使用" }
 ];
 
 export function SettingsContent(props: SettingsContentProps) {
-  if (props.activeId === "history") {
-    return <HistorySettings {...props} />;
+  switch (props.activeId) {
+    case "history":
+      return <HistorySettings {...props} />;
+    case "trash":
+      return <TrashSettings {...props} />;
+    case "general":
+      return <GeneralSettings {...props} />;
+    case "hotkeys":
+      return <HotkeySettings {...props} />;
+    case "about":
+      return <AboutSettings />;
+    default:
+      return <ClipboardSettings {...props} />;
   }
-  if (props.activeId === "general") {
-    return <GeneralSettings {...props} />;
-  }
-  if (props.activeId === "hotkeys") {
-    return <HotkeySettings {...props} />;
-  }
-  if (props.activeId === "about") {
-    return <AboutSettings />;
-  }
-  return <ClipboardSettings {...props} />;
 }
 
 function ClipboardSettings({ settings, onUpdateSettings }: SettingsContentProps) {
@@ -204,7 +212,7 @@ function HistorySettings({ clipsCount, onClearHistory, onUpdateSettings, setting
   return (
     <div className="settings-section-grid">
       <NumberRow
-        description="输入 0 代表无限条"
+        description="输入 0 表示无限条"
         icon={HardDrive}
         label="历史上限"
         value={settings.historyLimit}
@@ -217,17 +225,13 @@ function HistorySettings({ clipsCount, onClearHistory, onUpdateSettings, setting
         value={settings.retentionDays}
         onChange={(retentionDays) => onUpdateSettings({ retentionDays })}
       />
-      <NumberRow
-        description="默认 7 天，最长 30 天"
-        icon={Trash2}
-        label="回收站保留"
-        min={1}
-        max={30}
-        value={settings.trashRetentionDays}
-        onChange={(trashRetentionDays) => onUpdateSettings({ trashRetentionDays })}
-      />
       <InfoRow icon={HardDrive} label="当前记录" value={formatHistoryCount(clipsCount, settings.historyLimit)} />
-      <button className="settings-danger-row" disabled={!onClearHistory || clipsCount === 0} type="button" onClick={onClearHistory}>
+      <button
+        className="settings-danger-row"
+        disabled={!onClearHistory || clipsCount === 0}
+        type="button"
+        onClick={onClearHistory}
+      >
         <RowTitle description="删除全部历史记录" icon={Trash2} label="清空历史" />
         <span>执行</span>
       </button>
@@ -235,17 +239,122 @@ function HistorySettings({ clipsCount, onClearHistory, onUpdateSettings, setting
   );
 }
 
+function TrashSettings({
+  clips,
+  onConfirmDestructiveAction,
+  onPermanentlyDeleteClip,
+  onRestoreClip,
+  onUpdateSettings,
+  settings
+}: SettingsContentProps) {
+  const trashClips = clips.filter((clip) => Boolean(clip.deletedAt));
+
+  return (
+    <div className="settings-section-grid">
+      <NumberRow
+        description="默认 7 天，最长 30 天"
+        icon={Clock3}
+        label="回收站保留时长"
+        min={1}
+        max={30}
+        value={settings.trashRetentionDays}
+        onChange={(trashRetentionDays) => onUpdateSettings({ trashRetentionDays })}
+      />
+      <div className="settings-trash-panel">
+        <div className="settings-trash-panel-header">
+          <RowTitle
+            description="删除后的剪切板内容会保留在这里，可恢复或彻底删除"
+            icon={Trash2}
+            label="回收站内容"
+          />
+          <span className="settings-trash-count">{trashClips.length} 条</span>
+        </div>
+        {trashClips.length > 0 ? (
+          <div className="settings-trash-list" aria-label="回收站内容">
+            {trashClips.map((clip, index) => (
+              <ClipRow
+                key={clip.id}
+                clip={clip}
+                draftText=""
+                editing={false}
+                index={index}
+                motionEnabled={false}
+                query=""
+                pasteTrigger={settings.mousePasteTrigger}
+                selected={false}
+                onCancelEdit={() => {}}
+                onDraftTextChange={() => {}}
+                onEditStart={() => {}}
+                onMouseEnter={() => {}}
+                onOpenLink={() => {}}
+                onPasteClip={() => {}}
+                onPermanentlyDeleteClip={
+                  onPermanentlyDeleteClip
+                    ? async (id) => {
+                        const confirmed = await onConfirmDestructiveAction?.(
+                          "确定彻底删除这条回收站内容吗？"
+                        );
+                        if (settings.deleteConfirmation && confirmed === false) {
+                          return;
+                        }
+
+                        return onPermanentlyDeleteClip(id);
+                      }
+                    : undefined
+                }
+                onRestoreClip={onRestoreClip}
+                onSaveEdit={() => {}}
+                onSelect={() => {}}
+                onToggleFavorite={() => {}}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="settings-trash-empty">回收站里还没有内容</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function GeneralSettings({ settings, onUpdateSettings }: SettingsContentProps) {
   return (
     <div className="settings-section-grid">
-      <SwitchRow checked={settings.launchOnStartup} description="登录 Windows 后自动启动 ClipFlow" icon={Power} label="开机自启动" onChange={(launchOnStartup) => onUpdateSettings({ launchOnStartup })} />
+      <SwitchRow
+        checked={settings.showTrayIcon}
+        description="控制 Windows 托盘/通知区图标是否显示"
+        icon={Bell}
+        label="显示菜单栏图标"
+        onChange={(showTrayIcon) => onUpdateSettings({ showTrayIcon })}
+      />
+      <SwitchRow
+        checked={settings.showTaskbarIcon}
+        description="控制主窗口是否显示在 Windows 任务栏"
+        icon={Monitor}
+        label="显示任务栏图标"
+        onChange={(showTaskbarIcon) => onUpdateSettings({ showTaskbarIcon })}
+      />
+      <SwitchRow
+        checked={settings.launchOnStartup}
+        description="登录 Windows 后自动启动 ClipFlow"
+        icon={Power}
+        label="开机自启动"
+        onChange={(launchOnStartup) => onUpdateSettings({ launchOnStartup })}
+      />
       <div className="settings-control-row stacked">
         <RowTitle description="页面与面板的颜色模式" icon={Palette} label="主题模式" />
         <div className="settings-theme-grid" role="radiogroup" aria-label="主题模式">
           {themeOptions.map((option) => {
             const Icon = option.icon;
             return (
-              <button key={option.id} className={settings.themeMode === option.id ? "settings-theme-chip active" : "settings-theme-chip"} type="button" role="radio" aria-checked={settings.themeMode === option.id} onClick={() => onUpdateSettings({ themeMode: option.id })}>
+              <button
+                key={option.id}
+                className={settings.themeMode === option.id ? "settings-theme-chip active" : "settings-theme-chip"}
+                type="button"
+                role="radio"
+                aria-checked={settings.themeMode === option.id}
+                onClick={() => onUpdateSettings({ themeMode: option.id })}
+              >
                 <Icon size={16} />
                 {option.label}
               </button>
@@ -257,7 +366,14 @@ function GeneralSettings({ settings, onUpdateSettings }: SettingsContentProps) {
         <RowTitle description="选择 ClipFlow 的强调色" icon={Palette} label="预设颜色" />
         <div className="settings-color-grid" role="radiogroup" aria-label="预设颜色">
           {colorOptions.map((option) => (
-            <button key={option.id} className={settings.colorPreset === option.id ? "settings-color-chip active" : "settings-color-chip"} type="button" role="radio" aria-checked={settings.colorPreset === option.id} onClick={() => onUpdateSettings({ colorPreset: option.id })}>
+            <button
+              key={option.id}
+              className={settings.colorPreset === option.id ? "settings-color-chip active" : "settings-color-chip"}
+              type="button"
+              role="radio"
+              aria-checked={settings.colorPreset === option.id}
+              onClick={() => onUpdateSettings({ colorPreset: option.id })}
+            >
               <span style={{ background: option.swatch }} />
               {option.label}
             </button>
@@ -453,7 +569,7 @@ function AboutSettings() {
 }
 
 function formatHistoryCount(count: number, limit: number): string {
-  return limit === 0 ? `${count}/无限条` : `${count}/${limit} 条`;
+  return limit === 0 ? `${count}/无限` : `${count}/${limit} 条`;
 }
 
 function shortcutIcon(key: keyof SettingsShortcuts): LucideIcon {

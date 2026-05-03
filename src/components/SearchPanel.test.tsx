@@ -18,6 +18,8 @@ const settings: Settings = {
   retentionDays: 30,
   trashRetentionDays: 7,
   launchOnStartup: false,
+  showTrayIcon: true,
+  showTaskbarIcon: true,
   colorPreset: "teal",
   customColor: "#0d9488",
   windowPosition: "remember",
@@ -116,6 +118,37 @@ describe("SearchPanel", () => {
     expect(screen.getByRole("searchbox", { name: "搜索剪切板历史" })).toHaveFocus();
   });
 
+  it("keeps runtime and transient busy labels out of the clipboard chrome", () => {
+    render(
+      <SearchPanel
+        busyLabel="历史已刷新"
+        clips={clips}
+        runtimeLabel="Tauri 桌面"
+        settings={settings}
+        onCopyClip={vi.fn()}
+        onDeleteClip={vi.fn()}
+        onPasteClip={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText("Tauri 桌面")).not.toBeInTheDocument();
+    expect(screen.queryByText("历史已刷新")).not.toBeInTheDocument();
+  });
+
+  it("shows the copied time in clip metadata", () => {
+    render(
+      <SearchPanel
+        clips={clips}
+        settings={settings}
+        onCopyClip={vi.fn()}
+        onDeleteClip={vi.fn()}
+        onPasteClip={vi.fn()}
+      />
+    );
+
+    expect(screen.getAllByText(/复制于/).length).toBeGreaterThan(0);
+  });
+
   it("filters clips by search query", async () => {
     const user = userEvent.setup();
     render(
@@ -202,7 +235,6 @@ describe("SearchPanel", () => {
   it("deletes selected clip with Delete", async () => {
     const user = userEvent.setup();
     const onDeleteClip = vi.fn();
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     render(
       <SearchPanel
         clips={clips}
@@ -215,9 +247,11 @@ describe("SearchPanel", () => {
 
     await user.keyboard("{Delete}");
 
+    const dialog = screen.getByRole("alertdialog");
+    expect(onDeleteClip).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole("button", { name: "删除" }));
+
     expect(onDeleteClip).toHaveBeenCalledWith("2");
-    expect(confirmSpy).toHaveBeenCalledWith("删除这条剪切板内容后会进入回收站，继续吗？");
-    confirmSpy.mockRestore();
   });
 
   it("uses double-click as the default mouse paste action", async () => {
@@ -353,7 +387,7 @@ describe("SearchPanel", () => {
     );
 
     expect(within(filterRow).getByRole("tab", { name: "链接" })).toBeInTheDocument();
-    expect(within(filterRow).getByRole("tab", { name: "回收站" })).toBeInTheDocument();
+    expect(within(filterRow).queryByRole("tab", { name: "回收站" })).not.toBeInTheDocument();
     expect(within(filterRow).queryByRole("tab", { name: "代码" })).not.toBeInTheDocument();
   });
 
@@ -405,33 +439,20 @@ describe("SearchPanel", () => {
     );
   });
 
-  it("shows trash clips and supports restore and permanent delete actions", async () => {
-    const user = userEvent.setup();
-    const onRestoreClip = vi.fn();
-    const onPermanentlyDeleteClip = vi.fn();
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+  it("keeps recycle bin content out of the clipboard filter bar", () => {
     render(
       <SearchPanel
         clips={[...clips, trashClip]}
         settings={{ ...settings, optionalFilters: ["trash"] }}
         onCopyClip={vi.fn()}
         onDeleteClip={vi.fn()}
-        onPermanentlyDeleteClip={onPermanentlyDeleteClip}
         onPasteClip={vi.fn()}
-        onRestoreClip={onRestoreClip}
       />
     );
 
-    await user.click(screen.getByRole("tab", { name: "回收站" }));
-    const trashRow = screen.getByRole("option", { name: /deleted clip/ });
-
-    await user.click(within(trashRow).getByRole("button", { name: "恢复剪切板" }));
-    await user.click(within(trashRow).getByRole("button", { name: "彻底删除" }));
-
-    expect(onRestoreClip).toHaveBeenCalledWith("trash");
-    expect(onPermanentlyDeleteClip).toHaveBeenCalledWith("trash");
-    expect(confirmSpy).toHaveBeenCalledWith("确定彻底删除这条回收站内容吗？");
-    confirmSpy.mockRestore();
+    const filterRow = screen.getByRole("tablist", { name: "剪切板分类" });
+    expect(within(filterRow).queryByRole("tab", { name: "回收站" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /deleted clip/ })).not.toBeInTheDocument();
   });
 
   it("edits a copied text clip inline", async () => {
@@ -450,8 +471,9 @@ describe("SearchPanel", () => {
 
     const clipRow = screen.getByRole("option", { name: /cargo tauri dev/ });
     await user.click(within(clipRow).getByRole("button", { name: "编辑内容" }));
-    await user.clear(screen.getByRole("textbox"));
-    await user.type(screen.getByRole("textbox"), "updated clipboard text");
+    const editor = await screen.findByRole("textbox");
+    await user.clear(editor);
+    await user.type(editor, "updated clipboard text");
     await user.click(screen.getByRole("button", { name: "保存" }));
 
     expect(onUpdateClipText).toHaveBeenCalledWith("1", "updated clipboard text");

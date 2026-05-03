@@ -5,46 +5,47 @@
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  --surface: #f6fbf7;
-  --surface-container: #ffffff;
-  --surface-container-low: #f8fffb;
-  --surface-container-high: #edf7f2;
-  --surface-container-highest: #e4f1eb;
-  --surface-container-strong: #d8eee6;
-  --primary: #0d9488;
-  --primary-strong: #0f766e;
-  --primary-container: #ccfbf1;
+  --surface: #f4fbf7;
+  --surface-container: #fefffc;
+  --surface-container-low: #eff8f3;
+  --surface-container-high: #e1f0e8;
+  --surface-container-highest: #d0e5db;
+  --surface-container-strong: #bdd9cd;
+  --primary: #0a9688;
+  --primary-strong: #08756d;
+  --primary-container: #b7f2e7;
   --on-primary: #ffffff;
-  --secondary: #5f6f52;
-  --secondary-container: #e3f0d4;
-  --tertiary: #7c3aed;
-  --tertiary-container: #ede9fe;
+  --secondary: #566a60;
+  --secondary-container: #dcece3;
+  --tertiary: #7850df;
+  --tertiary-container: #e3dcff;
   --on-tertiary-container: #2e1065;
-  --accent: #f97316;
-  --accent-container: #fff1df;
+  --accent: #f57918;
+  --accent-container: #ffe1c4;
   --on-accent-container: #5f2500;
   --danger: #dc2626;
-  --danger-container: #fff0f0;
+  --danger-container: #ffe8e8;
   --text-strong: #11211f;
   --text-muted: #536763;
-  --border: #c9ded6;
-  --outline-variant: #d7e7df;
-  --focus-ring: #f97316;
-  --shadow-soft: 0 20px 56px rgba(12, 73, 67, 0.16);
-  --shadow-expressive: 0 18px 42px rgba(13, 148, 136, 0.18), 0 6px 18px rgba(249, 115, 22, 0.08);
-  --radius-shell: 30px;
-  --radius-panel: 24px;
-  --radius-row: 18px;
-  --radius-control: 16px;
-  --radius-icon: 14px;
+  --border: #b8d4cb;
+  --outline-variant: #c8dfd6;
+  --focus-ring: #f57918;
+  --shadow-soft: 0 18px 42px rgba(8, 80, 72, 0.13);
+  --shadow-expressive: 0 24px 58px rgba(10, 150, 136, 0.18), 0 8px 22px rgba(245, 121, 24, 0.1);
+  --radius-shell: 34px 24px 32px 26px;
+  --radius-panel: 24px 18px 22px 16px;
+  --radius-row: 18px 12px 18px 14px;
+  --radius-control: 16px 10px 16px 12px;
+  --radius-icon: 16px 12px 18px 12px;
   --scrollbar-size: 10px;
   --scrollbar-track: transparent;
   --scrollbar-thumb: color-mix(in srgb, var(--primary), var(--surface-container-highest) 48%);
   --scrollbar-thumb-hover: color-mix(in srgb, var(--primary), var(--text-strong) 14%);
   --motion-fast: 120ms;
-  --motion-medium: 180ms;
-  --motion-emphasized: 260ms;
+  --motion-medium: 220ms;
+  --motion-emphasized: 320ms;
   --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 * {
@@ -94,11 +95,16 @@ body::-webkit-scrollbar-button,
   height: 0 !important;
   inline-size: 0 !important;
   block-size: 0 !important;
+  max-width: 0 !important;
+  max-height: 0 !important;
+  max-inline-size: 0 !important;
+  max-block-size: 0 !important;
   min-width: 0 !important;
   min-height: 0 !important;
   padding: 0 !important;
   margin: 0 !important;
   opacity: 0 !important;
+  pointer-events: none !important;
   background: transparent !important;
   background-color: transparent !important;
   background-image: none !important;
@@ -134,6 +140,21 @@ body::-webkit-scrollbar-button,
   block-size: 0 !important;
 }
 
+::-webkit-scrollbar-button:start:increment,
+::-webkit-scrollbar-button:end:decrement,
+::-webkit-scrollbar-button:vertical:start:increment,
+::-webkit-scrollbar-button:vertical:end:decrement,
+*::-webkit-scrollbar-button:start:increment,
+*::-webkit-scrollbar-button:end:decrement,
+*::-webkit-scrollbar-button:vertical:start:increment,
+*::-webkit-scrollbar-button:vertical:end:decrement {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  inline-size: 0 !important;
+  block-size: 0 !important;
+}
+
 ::-webkit-scrollbar-button:horizontal,
 ::-webkit-scrollbar-button:horizontal:start,
 ::-webkit-scrollbar-button:horizontal:end,
@@ -151,6 +172,17 @@ body::-webkit-scrollbar-button,
   display: none !important;
   width: 0 !important;
   inline-size: 0 !important;
+}
+
+::-webkit-scrollbar-button:horizontal:start:increment,
+::-webkit-scrollbar-button:horizontal:end:decrement,
+*::-webkit-scrollbar-button:horizontal:start:increment,
+*::-webkit-scrollbar-button:horizontal:end:decrement {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  inline-size: 0 !important;
+  block-size: 0 !important;
 }
 
 html::-webkit-scrollbar-corner,
@@ -188,32 +220,32 @@ button:disabled {
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --surface: #0d1412;
-    --surface-container: #121c19;
-    --surface-container-low: #101916;
-    --surface-container-high: #1b2a26;
-    --surface-container-highest: #22332e;
-    --surface-container-strong: #26413b;
-    --primary: #5eead4;
-    --primary-strong: #2dd4bf;
-    --primary-container: #134e4a;
+    --surface: #08110f;
+    --surface-container: #0f1916;
+    --surface-container-low: #0c1513;
+    --surface-container-high: #15231f;
+    --surface-container-highest: #1d322c;
+    --surface-container-strong: #27453d;
+    --primary: #72ead9;
+    --primary-strong: #43d0bf;
+    --primary-container: #124943;
     --on-primary: #042f2e;
-    --secondary: #c7d7b8;
-    --secondary-container: #334229;
-    --tertiary: #c4b5fd;
-    --tertiary-container: #3b2467;
+    --secondary: #b8cbbf;
+    --secondary-container: #2c3c35;
+    --tertiary: #bda9ff;
+    --tertiary-container: #37265f;
     --on-tertiary-container: #f5f3ff;
-    --accent: #fb923c;
-    --accent-container: #431c03;
+    --accent: #ff9a46;
+    --accent-container: #4e2607;
     --on-accent-container: #ffedd5;
     --danger: #f87171;
-    --danger-container: #3f1010;
+    --danger-container: #451313;
     --text-strong: #effaf6;
-    --text-muted: #a8bbb6;
-    --border: #2d4640;
-    --outline-variant: #36544d;
-    --shadow-soft: 0 18px 48px rgba(0, 0, 0, 0.36);
-    --shadow-expressive: 0 20px 56px rgba(0, 0, 0, 0.4);
+    --text-muted: #9fb5ae;
+    --border: #28443d;
+    --outline-variant: #35574f;
+    --shadow-soft: 0 20px 52px rgba(0, 0, 0, 0.38);
+    --shadow-expressive: 0 26px 64px rgba(0, 0, 0, 0.44), 0 0 0 1px rgba(114, 234, 217, 0.08);
   }
 }
 

@@ -9,7 +9,6 @@ import {
   Image as ImageIcon,
   LayoutList,
   Link,
-  PencilLine,
   Pin,
   RefreshCw,
   RotateCcw,
@@ -21,12 +20,19 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent } from "react";
+import type { KeyboardEvent, PointerEvent } from "react";
 import { filterClips, moveSelection } from "../domain/clipSearch";
 import { playCopySound } from "../domain/copySound";
-import { magneticSpring, panelMotion } from "../domain/motion";
+import {
+  clipboardLayerDelays,
+  clipboardLayerMotion,
+  clipboardLayerTransition,
+  clipboardPanelMotion,
+  settingsSectionTransition
+} from "../domain/motion";
 import { matchesShortcut } from "../domain/shortcuts";
 import type { ClipFilter, ClipItem, OptionalClipFilter, Settings } from "../domain/types";
+import { ConfirmDialog } from "./ConfirmDialog";
 import {
   ClipRow,
   EmptyState,
@@ -44,6 +50,10 @@ type FilterDefinition<T extends ClipFilter = ClipFilter> = {
 
 type ClipAction = (id: string) => void | Promise<void>;
 type PanelAction = () => void | Promise<void>;
+type DestructiveConfirmation = {
+  message: string;
+  resolve: (value: boolean) => void;
+};
 
 interface SearchPanelProps {
   clips: ClipItem[];
@@ -62,6 +72,7 @@ interface SearchPanelProps {
   onPasteClip: ClipAction;
   onRefresh?: PanelAction;
   onRestoreClip?: ClipAction;
+  onStartWindowDrag?: PanelAction;
   onToggleFavorite?: ClipAction;
   onTogglePanelPinned?: PanelAction;
   onUpdateClipText?: (id: string, text: string) => void | Promise<void>;
@@ -79,18 +90,15 @@ const optionalFilters: Array<FilterDefinition<OptionalClipFilter>> = [
   { id: "link", label: "链接", icon: Link },
   { id: "code", label: "代码", icon: Code2 },
   { id: "richText", label: "富文本", icon: FileText },
-  { id: "recent", label: "最近使用", icon: Clock3 },
-  { id: "trash", label: "回收站", icon: Trash2 }
+  { id: "recent", label: "最近使用", icon: Clock3 }
 ];
 
 export function SearchPanel({
   clips,
   settings,
-  busyLabel = null,
   error = null,
   focusSignal = 0,
   loading = false,
-  runtimeLabel = "ClipFlow",
   onClearHistory,
   onCopyClip,
   onDeleteClip,
@@ -100,6 +108,7 @@ export function SearchPanel({
   onPasteClip,
   onRefresh,
   onRestoreClip,
+  onStartWindowDrag,
   onToggleFavorite = noopClipAction,
   onTogglePanelPinned,
   onUpdateClipText
@@ -110,9 +119,12 @@ export function SearchPanel({
   const [feedback, setFeedback] = useState<"idle" | "copied" | "pasted" | "moved" | "restored" | "deleted">("idle");
   const [editingClipId, setEditingClipId] = useState<string | null>(null);
   const [draftText, setDraftText] = useState("");
+  const [confirmation, setConfirmation] = useState<DestructiveConfirmation | null>(null);
   const deferredQuery = useDeferredValue(query);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const prefersReducedMotion = useReducedMotion();
+  const layerInitial = prefersReducedMotion ? false : clipboardLayerMotion.initial;
+  const layerAnimate = prefersReducedMotion ? undefined : clipboardLayerMotion.animate;
 
   const visibleFilters = useMemo(() => {
     const enabledOptionalFilters = new Set(settings.optionalFilters ?? []);
@@ -230,7 +242,7 @@ export function SearchPanel({
     nextFeedback: "copied" | "pasted" | "moved" | "restored" | "deleted",
     confirmMessage?: string
   ) {
-    if (confirmMessage && !confirmDestructiveAction(confirmMessage)) {
+    if (confirmMessage && !(await requestDestructiveConfirmation(confirmMessage))) {
       return;
     }
 
@@ -241,16 +253,29 @@ export function SearchPanel({
     pulseFeedback(nextFeedback);
   }
 
-  function handleClearHistory() {
-    if (!confirmDestructiveAction("清空全部剪切板历史？")) {
+  async function handleClearHistory() {
+    if (!(await requestDestructiveConfirmation("清空全部剪切板历史？"))) {
       return;
     }
 
-    void onClearHistory?.();
+    await onClearHistory?.();
   }
 
-  function confirmDestructiveAction(message: string): boolean {
-    return !settings.deleteConfirmation || window.confirm(message);
+  function requestDestructiveConfirmation(message: string): Promise<boolean> {
+    if (!settings.deleteConfirmation) {
+      return Promise.resolve(true);
+    }
+
+    return new Promise((resolve) => {
+      setConfirmation({ message, resolve });
+    });
+  }
+
+  function settleDestructiveConfirmation(value: boolean) {
+    setConfirmation((current) => {
+      current?.resolve(value);
+      return null;
+    });
   }
 
   function pulseFeedback(nextFeedback: "copied" | "pasted" | "moved" | "restored" | "deleted") {
@@ -301,6 +326,23 @@ export function SearchPanel({
     }
   }
 
+  function handleWindowDragPointerDown(event: PointerEvent<HTMLElement>) {
+    if (!onStartWindowDrag || event.button !== 0) {
+      return;
+    }
+
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+
+    if (target.closest("button, input, textarea, a, [data-no-window-drag='true']")) {
+      return;
+    }
+
+    void onStartWindowDrag();
+  }
+
   return (
     <motion.section
       className="clip-shell"
@@ -308,31 +350,28 @@ export function SearchPanel({
       data-pinned={settings.panelPinned ? "true" : undefined}
       data-edge-auto-hide={settings.edgeAutoHide ? "true" : undefined}
       aria-label="ClipFlow 剪切板搜索面板"
-      initial={prefersReducedMotion ? false : panelMotion.initial}
-      animate={prefersReducedMotion ? undefined : panelMotion.animate}
-      transition={settings.panelPinned || settings.edgeAutoHide ? magneticSpring : panelMotion.transition}
+      initial={prefersReducedMotion ? false : clipboardPanelMotion.initial}
+      animate={prefersReducedMotion ? undefined : clipboardPanelMotion.animate}
+      transition={clipboardPanelMotion.transition}
       onKeyDown={handleKeyDown}
     >
       {settings.edgeAutoHide ? <motion.span className="edge-dock-indicator" aria-hidden="true" layout /> : null}
-      <header className="panel-header">
+      <motion.header
+        className="panel-header"
+        initial={layerInitial}
+        animate={layerAnimate}
+        transition={clipboardLayerTransition(clipboardLayerDelays.header)}
+        onPointerDown={handleWindowDragPointerDown}
+      >
         <div className="brand-lockup">
           <motion.span
             className="brand-mark"
             aria-hidden="true"
-            animate={
-              prefersReducedMotion
-                ? undefined
-                : settings.panelPinned
-                  ? { rotate: -4, scale: 1.05 }
-                  : { rotate: 0, scale: 1 }
-            }
-            transition={magneticSpring}
           >
             <Clipboard size={18} />
           </motion.span>
           <div>
             <h1>ClipFlow</h1>
-            <span>{runtimeLabel}</span>
           </div>
         </div>
 
@@ -353,7 +392,7 @@ export function SearchPanel({
             <X size={17} />
           </IconButton>
         </div>
-      </header>
+      </motion.header>
 
       {settings.searchBoxPosition === "top" ? renderSearchStrip() : null}
 
@@ -364,7 +403,14 @@ export function SearchPanel({
         </div>
       ) : null}
 
-      <div className="filter-row" role="tablist" aria-label="剪切板分类">
+      <motion.div
+        className="filter-row"
+        role="tablist"
+        aria-label="剪切板分类"
+        initial={layerInitial}
+        animate={layerAnimate}
+        transition={clipboardLayerTransition(clipboardLayerDelays.filter)}
+      >
         {visibleFilters.map((item) => {
           const FilterIcon = item.icon;
           return (
@@ -375,8 +421,7 @@ export function SearchPanel({
               role="tab"
               aria-selected={item.id === filter}
               layout
-              whileHover={prefersReducedMotion ? undefined : { y: -1 }}
-              whileTap={prefersReducedMotion ? undefined : { scale: 0.96 }}
+              transition={settingsSectionTransition}
               onClick={() => setFilter(item.id)}
             >
               <FilterIcon aria-hidden="true" size={14} strokeWidth={2.35} />
@@ -384,21 +429,27 @@ export function SearchPanel({
             </motion.button>
           );
         })}
-      </div>
+      </motion.div>
 
-      <div className="clip-list-frame">
+      <motion.div
+        className="clip-list-frame"
+        initial={layerInitial}
+        animate={layerAnimate}
+        transition={clipboardLayerTransition(clipboardLayerDelays.list)}
+      >
         <div className="clip-list" role="listbox" aria-busy={loading} aria-label="剪切板历史">
           {loading && displayedClips.length === 0 ? (
             <LoadingState />
           ) : displayedClips.length === 0 ? (
             <EmptyState filter={filter} query={query} />
           ) : (
-            <AnimatePresence initial={!prefersReducedMotion}>
+            <AnimatePresence initial={!prefersReducedMotion} mode="popLayout">
               {displayedClips.map((clip, index) => (
                 <ClipRow
                   key={clip.id}
                   clip={clip}
                   draftText={draftText}
+                  entryBaseDelay={clipboardLayerDelays.rows}
                   editing={editingClipId === clip.id}
                   index={index}
                   motionEnabled={!prefersReducedMotion}
@@ -435,11 +486,16 @@ export function SearchPanel({
             </AnimatePresence>
           )}
         </div>
-      </div>
+      </motion.div>
 
       {settings.searchBoxPosition === "bottom" ? renderSearchStrip() : null}
 
-      <footer className="panel-footer">
+      <motion.footer
+        className="panel-footer"
+        initial={layerInitial}
+        animate={layerAnimate}
+        transition={clipboardLayerTransition(clipboardLayerDelays.footer)}
+      >
         <span>{visibleClips.length} 项匹配</span>
         <div className="footer-actions">
           {selectedClip ? (
@@ -476,11 +532,6 @@ export function SearchPanel({
               </>
             ) : (
               <>
-                {onUpdateClipText && canEditClip(selectedClip) ? (
-                  <IconButton label="编辑内容" onClick={() => startEditing(selectedClip)}>
-                    <PencilLine size={16} />
-                  </IconButton>
-                ) : null}
                 <IconButton
                   label="复制选中项"
                   onClick={() => runClipAction(onCopyClip, selectedClip.id, "copied")}
@@ -504,21 +555,27 @@ export function SearchPanel({
               </>
             )
           ) : null}
-          <Feedback busyLabel={busyLabel} feedback={feedback} />
+          <Feedback feedback={feedback} />
         </div>
-      </footer>
+      </motion.footer>
+      <ConfirmDialog
+        open={Boolean(confirmation)}
+        title="删除剪切板内容"
+        description={confirmation?.message ?? ""}
+        confirmLabel="删除"
+        onCancel={() => settleDestructiveConfirmation(false)}
+        onConfirm={() => settleDestructiveConfirmation(true)}
+      />
     </motion.section>
   );
 
   function renderSearchStrip() {
     return (
       <SearchStrip
-        busyLabel={busyLabel}
-        clips={activeClips}
+        entryDelay={clipboardLayerDelays.search}
         inputRef={searchInputRef}
         loading={loading}
         query={query}
-        settings={settings}
         onQueryChange={setQuery}
       />
     );

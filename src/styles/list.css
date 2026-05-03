@@ -2,6 +2,15 @@
   position: relative;
   min-height: 0;
   flex: 1;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface-container-low), var(--primary) 5%),
+      color-mix(in srgb, var(--surface-container-low), var(--accent) 4%)
+    ),
+    var(--surface-container-low);
+  border-block: 1px solid color-mix(in srgb, var(--primary), transparent 86%);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--surface-container), transparent 16%);
 }
 
 .clip-list-frame::before,
@@ -12,7 +21,7 @@
   width: 16px;
   height: 20px;
   pointer-events: none;
-  background: var(--surface-container);
+  background: color-mix(in srgb, var(--surface-container-low), var(--primary) 5%);
   content: "";
 }
 
@@ -27,8 +36,9 @@
 .clip-list {
   height: 100%;
   min-height: 0;
-  padding: 6px 12px 8px;
+  padding: 8px 12px 10px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .clip-row {
@@ -43,14 +53,20 @@
   padding: 8px 12px;
   color: var(--text-strong);
   text-align: left;
-  background: transparent;
-  border: 1px solid transparent;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-container-low), var(--primary) 2%), var(--surface-container-low)),
+    var(--surface-container-low);
+  border: 1px solid color-mix(in srgb, var(--primary), transparent 86%);
   border-radius: var(--radius-row);
   cursor: pointer;
   overflow: hidden;
+  transform-origin: center center;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--surface-container), transparent 24%);
   transition:
     background var(--motion-fast) ease-out,
     border-color var(--motion-fast) ease-out,
+    border-radius var(--motion-fast) ease-out,
+    box-shadow var(--motion-fast) ease-out,
     transform var(--motion-fast) ease-out;
 }
 
@@ -65,29 +81,43 @@
   content: "";
   pointer-events: none;
   background:
-    radial-gradient(circle at 16% 50%, color-mix(in srgb, var(--primary), transparent 82%), transparent 42%),
-    linear-gradient(90deg, color-mix(in srgb, var(--primary), transparent 88%), transparent 62%);
+    radial-gradient(circle at 16% 50%, color-mix(in srgb, var(--primary), transparent 78%), transparent 42%),
+    linear-gradient(90deg, color-mix(in srgb, var(--accent), transparent 82%), transparent 62%);
   border-radius: inherit;
   opacity: 0;
   transform: scaleX(0.92);
   transform-origin: left center;
 }
 
-.clip-row:hover,
-.clip-row.active {
-  background: var(--primary-container);
-  border-color: color-mix(in srgb, var(--primary), transparent 42%);
+.clip-row:hover {
+  background: color-mix(in srgb, var(--surface-container-high), var(--primary-container) 12%);
+  border-color: transparent;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--surface-container), transparent 16%),
+    0 8px 18px color-mix(in srgb, var(--primary), transparent 92%);
 }
 
 .clip-row.active {
-  border-radius: 26px 18px 26px 18px;
-  transform: translateY(-1px) scale(1.005);
+  background:
+    radial-gradient(circle at 10% 50%, color-mix(in srgb, var(--accent-container), transparent 40%), transparent 38%),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--primary-container), var(--surface-container) 8%),
+      color-mix(in srgb, var(--primary-container), var(--surface-container-low) 18%)
+    ),
+    var(--primary-container);
+  border-color: color-mix(in srgb, var(--primary), transparent 48%);
+  border-radius: 22px 14px 22px 16px;
+  box-shadow:
+    0 12px 28px color-mix(in srgb, var(--primary), transparent 84%),
+    inset 0 1px 0 color-mix(in srgb, var(--surface-container), transparent 18%);
+  transform: translateY(-1px);
 }
 
 .clip-row.active::before {
   opacity: 1;
   transform: scaleX(1);
-  animation: focus-ripple 460ms cubic-bezier(0.2, 0, 0, 1);
+  animation: focus-ripple var(--motion-fast) ease-out;
 }
 
 .clip-key {
@@ -96,10 +126,12 @@
   height: 40px;
   place-items: center;
   color: var(--primary-strong);
-  background: var(--primary-container);
-  border-radius: 16px 12px 16px 12px;
+  background: color-mix(in srgb, var(--primary-container), var(--surface-container) 16%);
+  border: 1px solid color-mix(in srgb, var(--primary), transparent 74%);
+  border-radius: var(--radius-icon);
   font-size: 13px;
   font-weight: 850;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--surface-container), transparent 18%);
 }
 
 .clip-key.image {
@@ -119,11 +151,20 @@
 
 .clip-row.active .clip-key {
   color: var(--on-primary);
-  background: var(--primary);
-  border-radius: 20px;
+  background: linear-gradient(135deg, var(--primary), var(--primary-strong));
+  border-color: color-mix(in srgb, var(--primary), var(--on-primary) 16%);
+  border-radius: 18px 12px 18px 12px;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--primary), transparent 82%);
 }
 
 .clip-copy {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.clip-preview {
+  display: block;
   min-width: 0;
 }
 
@@ -167,8 +208,8 @@
   padding: 0 3px;
   color: var(--on-accent-container);
   background: var(--accent-container);
-  border-radius: 6px;
-  animation: search-highlight-in 360ms cubic-bezier(0.2, 0, 0, 1);
+  border-radius: 8px 6px 8px 6px;
+  animation: search-highlight-in var(--motion-medium) var(--ease-spring);
 }
 
 .clip-meta {
@@ -185,6 +226,11 @@
 
 .clip-meta svg {
   flex: 0 0 auto;
+}
+
+.clip-copy-time {
+  color: color-mix(in srgb, var(--primary-strong), var(--text-muted) 28%);
+  font-weight: 750;
 }
 
 .clip-source-icon,
@@ -230,13 +276,14 @@
   place-items: center;
   color: var(--text-muted);
   background: var(--surface-container-high);
-  border: 1px solid color-mix(in srgb, var(--primary), transparent 84%);
-  border-radius: 16px 10px 16px 10px;
+  border: 1px solid color-mix(in srgb, var(--primary), transparent 80%);
+  border-radius: var(--radius-icon);
   transition:
     color var(--motion-fast) ease-out,
     background var(--motion-fast) ease-out,
     border-color var(--motion-fast) ease-out,
-    border-radius var(--motion-fast) ease-out;
+    border-radius var(--motion-fast) ease-out,
+    box-shadow var(--motion-fast) ease-out;
 }
 
 .clip-favorite-button:hover,
@@ -244,8 +291,9 @@
 .clip-action-button:hover {
   color: var(--primary-strong);
   background: var(--primary-container);
-  border-color: color-mix(in srgb, var(--primary), transparent 62%);
+  border-color: transparent;
   border-radius: 18px 12px 18px 12px;
+  box-shadow: 0 6px 14px color-mix(in srgb, var(--primary), transparent 88%);
 }
 
 .clip-favorite-button:disabled,
@@ -268,6 +316,9 @@
   display: grid;
   gap: 8px;
   width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  transform-origin: top center;
 }
 
 .clip-editor-input {
@@ -278,7 +329,7 @@
   color: var(--text-strong);
   background: var(--surface-container);
   border: 1px solid color-mix(in srgb, var(--primary), transparent 72%);
-  border-radius: 18px 12px 18px 12px;
+  border-radius: 16px 10px 16px 10px;
   font: inherit;
   font-size: 13px;
   line-height: 1.45;
@@ -301,7 +352,7 @@
   color: var(--primary-strong);
   background: var(--primary-container);
   border: 1px solid color-mix(in srgb, var(--primary), transparent 72%);
-  border-radius: 16px 10px 16px 10px;
+  border-radius: 14px 10px 14px 10px;
   font-size: 12px;
   font-weight: 900;
 }
@@ -332,15 +383,18 @@
   min-height: 64px;
   padding: 12px 14px;
   color: var(--text-muted);
-  border-top: 1px solid var(--border);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-container-low), var(--primary) 4%), var(--surface-container-low)),
+    var(--surface-container-low);
+  border-top: 1px solid color-mix(in srgb, var(--primary), transparent 82%);
   font-size: 12px;
 }
 
 .footer-pill.active {
   color: var(--on-primary);
-  background: var(--primary);
-  animation: feedback-pill-in 260ms cubic-bezier(0.2, 0, 0, 1);
-  box-shadow: 0 8px 20px color-mix(in srgb, var(--primary), transparent 78%);
+  background: linear-gradient(135deg, var(--primary), var(--primary-strong));
+  animation: feedback-pill-in var(--motion-fast) ease-out;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--primary), transparent 84%);
 }
 
 .spin {
@@ -356,7 +410,12 @@
 @keyframes focus-ripple {
   from {
     opacity: 0;
-    transform: scaleX(0.82);
+    transform: scaleX(0.96);
+  }
+
+  68% {
+    opacity: 1;
+    transform: scaleX(1.01);
   }
 
   to {
@@ -367,23 +426,28 @@
 
 @keyframes search-highlight-in {
   from {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent), transparent 72%);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent), transparent 84%);
   }
 
   to {
-    box-shadow: 0 0 0 9px transparent;
+    box-shadow: 0 0 0 4px transparent;
   }
 }
 
 @keyframes feedback-pill-in {
   from {
     opacity: 0;
-    transform: translateX(18px) scale(0.94);
+    transform: translateX(8px);
+  }
+
+  70% {
+    opacity: 1;
+    transform: translateX(0);
   }
 
   to {
     opacity: 1;
-    transform: translateX(0) scale(1);
+    transform: translateX(0);
   }
 }
 
@@ -434,7 +498,10 @@
   }
 
   .clip-row.active,
-  .icon-button:hover:not(:disabled) {
+  .icon-button:hover:not(:disabled),
+  .icon-button.active,
+  .filter-chip:hover:not(.active),
+  .filter-chip.active {
     transform: none;
   }
 }

@@ -15,6 +15,8 @@ export const defaultSettings: Settings = {
   retentionDays: 30,
   trashRetentionDays: 7,
   launchOnStartup: false,
+  showTrayIcon: true,
+  showTaskbarIcon: true,
   colorPreset: "teal",
   customColor: "#0d9488",
   panelPinned: false,

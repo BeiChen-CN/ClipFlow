@@ -1,46 +1,151 @@
 export const md3Ease: [number, number, number, number] = [0.2, 0, 0, 1];
+export const md3ExpressiveEase: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
 export const panelMotion = {
-  initial: { opacity: 0, y: 18, scale: 0.982, borderRadius: 34 },
-  animate: { opacity: 1, y: 0, scale: 1, borderRadius: 28 },
-  transition: { duration: 0.26, ease: md3Ease }
+  initial: { opacity: 0, y: 8, scale: 0.995 },
+  animate: { opacity: 1, y: 0, scale: 1 },
+  transition: {
+    type: "tween" as const,
+    duration: 0.17,
+    ease: md3ExpressiveEase
+  }
 };
+
+export const clipboardPanelMotion = {
+  initial: { opacity: 0, y: 10, scale: 0.99 },
+  animate: { opacity: 1, y: 0, scale: 1 },
+  transition: {
+    type: "tween" as const,
+    duration: 0.2,
+    ease: md3ExpressiveEase
+  }
+};
+
+export const clipboardLayerMotion = {
+  initial: { opacity: 0, y: 4 },
+  animate: { opacity: 1, y: 0 }
+};
+
+export const clipboardLayerDelays = {
+  header: 0,
+  search: 0.03,
+  filter: 0.07,
+  list: 0.1,
+  rows: 0.12,
+  footer: 0.15
+} as const;
+
+export function clipboardLayerTransition(delay = 0) {
+  return {
+    type: "tween" as const,
+    duration: 0.12,
+    ease: md3ExpressiveEase,
+    delay
+  };
+}
+
+export type RouteDirection = "toSettings" | "toClipboard";
 
 export const routeVariants = {
-  initial: { opacity: 0, x: 42, scale: 0.992 },
-  animate: { opacity: 1, x: 0, scale: 1 },
-  exit: { opacity: 0, x: -30, scale: 0.996 }
+  initial: (direction: RouteDirection) => ({
+    opacity: 0,
+    x: direction === "toSettings" ? 24 : -24
+  }),
+  animate: { opacity: 1, x: 0 },
+  exit: (direction: RouteDirection) => ({
+    opacity: 0,
+    x: direction === "toSettings" ? -18 : 18
+  })
 };
 
-export const routeTransition = { duration: 0.28, ease: md3Ease };
+export const routeTransition = {
+  type: "tween" as const,
+  duration: 0.26,
+  ease: md3Ease
+};
 
 export const settingsSectionVariants = {
-  initial: { opacity: 0, x: 34, scale: 0.99 },
-  animate: { opacity: 1, x: 0, scale: 1 },
-  exit: { opacity: 0, x: -22, scale: 0.995 }
+  initial: { opacity: 0, y: 6 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -4 }
 };
 
-export const settingsSectionTransition = { duration: 0.24, ease: md3Ease };
+export const settingsSectionTransition = {
+  type: "tween" as const,
+  duration: 0.13,
+  ease: md3Ease
+};
 
 export const magneticSpring = {
-  type: "spring" as const,
-  stiffness: 420,
-  damping: 36,
-  mass: 0.9
+  type: "tween" as const,
+  duration: 0.14,
+  ease: md3Ease
 };
 
-export function clipRowTransition(index: number) {
+export const clipEditorMotion = {
+  contentInitial: { opacity: 0 },
+  contentAnimate: {
+    opacity: 1,
+    transition: {
+      type: "tween" as const,
+      duration: 0.12,
+      ease: md3Ease,
+      delay: 0.02
+    }
+  },
+  contentExit: {
+    opacity: 0,
+    transition: {
+      type: "tween" as const,
+      duration: 0.08,
+      ease: md3Ease
+    }
+  },
+  editorInitial: { opacity: 0, y: 6 },
+  editorAnimate: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      type: "tween" as const,
+      duration: 0.16,
+      ease: md3Ease,
+      delay: 0.04
+    }
+  },
+  editorExit: {
+    opacity: 0,
+    y: 5,
+    transition: {
+      type: "tween" as const,
+      duration: 0.12,
+      ease: md3Ease
+    }
+  },
+  layoutTransition: {
+    type: "tween" as const,
+    duration: 0.26,
+    ease: md3Ease
+  }
+};
+
+export function clipRowTransition(index: number, baseDelay = 0, editing = false) {
+  if (editing) {
+    return clipEditorMotion.layoutTransition;
+  }
+
   return {
-    duration: 0.2,
-    ease: md3Ease,
-    delay: Math.min(index * 0.035, 0.18)
+    ...settingsSectionTransition,
+    duration: 0.1,
+    delay: baseDelay + Math.min(index * 0.005, 0.025)
   };
 }
 
 export const feedbackVariants = {
-  initial: { opacity: 0, x: 22, scale: 0.94 },
-  animate: { opacity: 1, x: 0, scale: 1 },
-  exit: { opacity: 0, x: -14, scale: 0.96 }
+  initial: { opacity: 0, y: 4 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -3 }
 };
 
-export const feedbackTransition = { duration: 0.18, ease: md3Ease };
+export const feedbackTransition = {
+  ...settingsSectionTransition
+};

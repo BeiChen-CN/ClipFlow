@@ -90,6 +90,10 @@ pub struct Settings {
     pub trash_retention_days: u32,
     #[serde(default)]
     pub launch_on_startup: bool,
+    #[serde(default = "default_true")]
+    pub show_tray_icon: bool,
+    #[serde(default = "default_true")]
+    pub show_taskbar_icon: bool,
     #[serde(default)]
     pub color_preset: ColorPreset,
     #[serde(default = "default_custom_color")]
@@ -125,6 +129,8 @@ impl Default for Settings {
             retention_days: default_retention_days(),
             trash_retention_days: default_trash_retention_days(),
             launch_on_startup: false,
+            show_tray_icon: true,
+            show_taskbar_icon: true,
             color_preset: ColorPreset::Teal,
             custom_color: default_custom_color(),
             panel_pinned: false,
@@ -249,6 +255,8 @@ pub struct SettingsPatch {
     pub retention_days: Option<u32>,
     pub trash_retention_days: Option<u32>,
     pub launch_on_startup: Option<bool>,
+    pub show_tray_icon: Option<bool>,
+    pub show_taskbar_icon: Option<bool>,
     pub color_preset: Option<ColorPreset>,
     pub custom_color: Option<String>,
     pub panel_pinned: Option<bool>,
@@ -296,4 +304,32 @@ fn default_trash_retention_days() -> u32 {
 
 fn default_true() -> bool {
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_settings_show_tray_and_taskbar_icons() {
+        let settings = Settings::default();
+
+        assert!(settings.show_tray_icon);
+        assert!(settings.show_taskbar_icon);
+    }
+
+    #[test]
+    fn legacy_settings_without_icon_visibility_fields_default_to_visible() {
+        let settings = serde_json::from_str::<Settings>(
+            r#"{
+                "launchOnStartup": false,
+                "historyLimit": 100,
+                "retentionDays": 30
+            }"#,
+        )
+        .expect("legacy settings");
+
+        assert!(settings.show_tray_icon);
+        assert!(settings.show_taskbar_icon);
+    }
 }

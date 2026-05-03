@@ -15,42 +15,46 @@ import {
   RotateCcw,
   Trash2
 } from "lucide-react";
-import { motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { forwardRef, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type { ReactNode } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { extractUrls } from "../domain/clipSearch";
-import { clipRowTransition, md3Ease } from "../domain/motion";
-import type { ClipFilter, ClipItem, MousePasteTrigger, Settings } from "../domain/types";
+import {
+  clipboardLayerMotion,
+  clipboardLayerTransition,
+  clipEditorMotion,
+  clipRowTransition
+} from "../domain/motion";
+import type { ClipFilter, ClipItem, MousePasteTrigger } from "../domain/types";
 
 type PanelAction = () => void | Promise<void>;
 
 export function SearchStrip({
-  busyLabel,
-  clips,
+  entryDelay = 0,
   inputRef,
   loading,
   onQueryChange,
-  query,
-  settings
+  query
 }: {
-  busyLabel: string | null;
-  clips: ClipItem[];
+  entryDelay?: number;
   inputRef: RefObject<HTMLInputElement>;
   loading: boolean;
   onQueryChange: (value: string) => void;
   query: string;
-  settings: Settings;
 }) {
   const prefersReducedMotion = useReducedMotion();
+  const hasStatus = loading;
 
   return (
     <motion.div
       className="search-strip"
       data-search-active={query.trim() ? "true" : undefined}
-      initial={prefersReducedMotion ? false : { opacity: 0, y: 10, scale: 0.99 }}
-      animate={prefersReducedMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.22, ease: md3Ease }}
+      data-has-status={hasStatus ? "true" : undefined}
+      initial={prefersReducedMotion ? false : clipboardLayerMotion.initial}
+      animate={prefersReducedMotion ? undefined : clipboardLayerMotion.animate}
+      transition={clipboardLayerTransition(entryDelay)}
     >
       <Search aria-hidden="true" className="search-icon" />
       <input
@@ -64,66 +68,32 @@ export function SearchStrip({
         value={query}
         onChange={(event) => onQueryChange(event.target.value)}
       />
-      <StatusChip busyLabel={busyLabel} clips={clips} loading={loading} settings={settings} />
+      {hasStatus ? <StatusChip loading={loading} /> : null}
     </motion.div>
   );
 }
 
 export function StatusChip({
-  busyLabel,
-  clips,
-  loading,
-  settings
+  loading
 }: {
-  busyLabel: string | null;
-  clips: ClipItem[];
   loading: boolean;
-  settings: Settings;
 }) {
-  if (loading || busyLabel) {
+  if (loading) {
     return (
       <span className="status-chip">
         <Loader2 aria-hidden="true" className="spin" size={15} />
-        {busyLabel ?? "同步中"}
+        同步中
       </span>
     );
   }
 
-  return (
-    <span className="status-chip">
-      <Clipboard aria-hidden="true" size={15} />
-      {formatHistoryCount(clips.length, settings.historyLimit)}
-    </span>
-  );
+  return null;
 }
 
-function formatHistoryCount(count: number, limit: number): string {
-  return limit === 0 ? `${count}/无限` : `${count}/${limit}`;
-}
-
-export function ClipRow({
-  clip,
-  draftText,
-  editing,
-  index,
-  motionEnabled,
-  onCancelEdit,
-  onDraftTextChange,
-  onEditStart,
-  onMouseEnter,
-  onOpenLink,
-  onPasteClip,
-  onPermanentlyDeleteClip,
-  onRestoreClip,
-  onSaveEdit,
-  onSelect,
-  onToggleFavorite,
-  pasteTrigger,
-  query,
-  selected
-}: {
+type ClipRowProps = {
   clip: ClipItem;
   draftText: string;
+  entryBaseDelay?: number;
   editing: boolean;
   index: number;
   motionEnabled: boolean;
@@ -141,13 +111,53 @@ export function ClipRow({
   pasteTrigger: MousePasteTrigger;
   query: string;
   selected: boolean;
-}) {
+};
+
+export const ClipRow = forwardRef<HTMLDivElement, ClipRowProps>(function ClipRow(
+  {
+    clip,
+    draftText,
+    entryBaseDelay = 0,
+    editing,
+    index,
+    motionEnabled,
+    onCancelEdit,
+    onDraftTextChange,
+    onEditStart,
+    onMouseEnter,
+    onOpenLink,
+    onPasteClip,
+    onPermanentlyDeleteClip,
+    onRestoreClip,
+    onSaveEdit,
+    onSelect,
+    onToggleFavorite,
+    pasteTrigger,
+    query,
+    selected
+  },
+  ref
+) {
   const isEditable = isEditableClip(clip);
   const isEditing = editing && isEditable;
+  const [editorClosing, setEditorClosing] = useState(false);
+  const previousEditingRef = useRef(isEditing);
+  const isEditorClosing = editorClosing || (!isEditing && previousEditingRef.current);
+  const isEditorExpanded = isEditing || isEditorClosing;
+
+  useEffect(() => {
+    if (isEditing) {
+      setEditorClosing(false);
+    } else if (previousEditingRef.current) {
+      setEditorClosing(true);
+    }
+
+    previousEditingRef.current = isEditing;
+  }, [isEditing]);
 
   function handleSelect() {
     onSelect();
-    if (clip.deletedAt || isEditing) {
+    if (clip.deletedAt || isEditorExpanded) {
       return;
     }
 
@@ -157,7 +167,7 @@ export function ClipRow({
   }
 
   function handleDoubleClick() {
-    if (clip.deletedAt || isEditing) {
+    if (clip.deletedAt || isEditorExpanded) {
       return;
     }
 
@@ -183,17 +193,17 @@ export function ClipRow({
 
   return (
     <motion.div
-      className={createClipRowClass(selected, isEditing, Boolean(clip.deletedAt))}
+      ref={ref}
+      className={createClipRowClass(selected, isEditorExpanded, Boolean(clip.deletedAt))}
       role="option"
       aria-selected={selected}
       aria-label={createClipRowLabel(clip, index, selected)}
       tabIndex={-1}
       layout={motionEnabled}
-      initial={motionEnabled ? { opacity: 0, y: 8, scale: 0.985 } : false}
-      animate={motionEnabled ? { opacity: 1, y: 0, scale: selected ? 1.006 : 1 } : undefined}
-      exit={motionEnabled ? { opacity: 0, y: -6, scale: 0.98 } : undefined}
-      transition={clipRowTransition(index)}
-      whileHover={motionEnabled ? { y: -1 } : undefined}
+      initial={motionEnabled ? { opacity: 0, y: 3 } : false}
+      animate={motionEnabled ? { opacity: 1, y: 0 } : undefined}
+      exit={motionEnabled ? { opacity: 0, y: -2 } : undefined}
+      transition={clipRowTransition(index, entryBaseDelay, isEditorExpanded)}
       onMouseEnter={onMouseEnter}
       onClick={handleSelect}
       onDoubleClick={handleDoubleClick}
@@ -203,45 +213,61 @@ export function ClipRow({
       </span>
 
       <span className="clip-copy">
-        {isEditing ? (
-          <span className="clip-editor">
-            <textarea
-              autoFocus
-              className="clip-editor-input"
-              value={draftText}
-              onChange={(event) => onDraftTextChange(event.currentTarget.value)}
-              onKeyDown={handleEditorKeyDown}
-            />
-            <span className="clip-editor-actions">
-              <button type="button" onClick={() => void onSaveEdit()}>
-                保存
-              </button>
-              <button type="button" onClick={onCancelEdit}>
-                取消
-              </button>
-            </span>
-          </span>
-        ) : (
-          <>
-            <span className="clip-text">
-              {renderHighlightedText(clip.preview, query, onOpenLink)}
-            </span>
-            <span className="clip-meta">
-              {clip.sourceAppIcon ? (
-                <img alt="" className="clip-source-icon" src={clip.sourceAppIcon} />
-              ) : clip.sourceAppName ? (
-                <span className="clip-source-fallback" aria-hidden="true">
-                  {clip.sourceAppName.slice(0, 1).toUpperCase()}
-                </span>
-              ) : null}
-              {clip.sourceAppName ? <span>{clip.sourceAppName}</span> : null}
-              <KindIcon kind={clip.kind} />
-              <span>{kindLabel(clip.kind)}</span>
-              {kindDetail(clip) ? <span>{kindDetail(clip)}</span> : null}
-              {clip.deletedAt ? <span>回收站 · {relativeTime(clip.deletedAt)}</span> : <span>{relativeTime(clip.createdAt)}</span>}
-            </span>
-          </>
-        )}
+        <AnimatePresence initial={false} mode="wait" onExitComplete={() => setEditorClosing(false)}>
+          {isEditing ? (
+            <motion.span
+              key="editor"
+              className="clip-editor"
+              initial={motionEnabled ? clipEditorMotion.editorInitial : false}
+              animate={motionEnabled ? clipEditorMotion.editorAnimate : undefined}
+              exit={motionEnabled ? clipEditorMotion.editorExit : undefined}
+            >
+              <textarea
+                autoFocus
+                className="clip-editor-input"
+                value={draftText}
+                onChange={(event) => onDraftTextChange(event.currentTarget.value)}
+                onKeyDown={handleEditorKeyDown}
+              />
+              <span className="clip-editor-actions">
+                <button type="button" onClick={() => void onSaveEdit()}>
+                  保存
+                </button>
+                <button type="button" onClick={onCancelEdit}>
+                  取消
+                </button>
+              </span>
+            </motion.span>
+          ) : (
+            <motion.span
+              key="content"
+              className="clip-preview"
+              initial={motionEnabled ? clipEditorMotion.contentInitial : false}
+              animate={motionEnabled ? clipEditorMotion.contentAnimate : undefined}
+              exit={motionEnabled ? clipEditorMotion.contentExit : undefined}
+            >
+              <span className="clip-text">
+                {renderHighlightedText(clip.preview, query, onOpenLink)}
+              </span>
+              <span className="clip-meta">
+                {clip.sourceAppIcon ? (
+                  <img alt="" className="clip-source-icon" src={clip.sourceAppIcon} />
+                ) : clip.sourceAppName ? (
+                  <span className="clip-source-fallback" aria-hidden="true">
+                    {clip.sourceAppName.slice(0, 1).toUpperCase()}
+                  </span>
+                ) : null}
+                {clip.sourceAppName ? <span>{clip.sourceAppName}</span> : null}
+                <KindIcon kind={clip.kind} />
+                <span>{kindLabel(clip.kind)}</span>
+                {kindDetail(clip) ? <span>{kindDetail(clip)}</span> : null}
+                {clip.deletedAt ? <span>回收站 · {relativeTime(clip.deletedAt)}</span> : null}
+                <span className="clip-copy-time">{formatCopyTime(clip.createdAt)}</span>
+                {!clip.deletedAt ? <span>{relativeTime(clip.createdAt)}</span> : null}
+              </span>
+            </motion.span>
+          )}
+        </AnimatePresence>
       </span>
 
       <span className="clip-actions-inline">
@@ -313,7 +339,7 @@ export function ClipRow({
       </span>
     </motion.div>
   );
-}
+});
 
 function renderHighlightedText(value: string, query: string, onOpenLink: (url: string) => void): ReactNode[] {
   const urls = extractUrls(value);
@@ -415,23 +441,12 @@ export function EmptyState({ filter, query }: { filter: ClipFilter; query: strin
 }
 
 export function Feedback({
-  busyLabel,
   feedback
 }: {
-  busyLabel: string | null;
   feedback: "idle" | "copied" | "pasted" | "moved" | "restored" | "deleted";
 }) {
-  if (busyLabel) {
-    return (
-      <span className="footer-pill active">
-        <Loader2 aria-hidden="true" className="spin" size={15} />
-        {busyLabel}
-      </span>
-    );
-  }
-
   if (feedback === "idle") {
-    return <span className="footer-pill">就绪</span>;
+    return null;
   }
 
   const labels = {
@@ -473,8 +488,6 @@ export function IconButton({
   label: string;
   onClick?: PanelAction;
 }) {
-  const prefersReducedMotion = useReducedMotion();
-
   return (
     <motion.button
       aria-label={label}
@@ -482,7 +495,7 @@ export function IconButton({
       disabled={disabled || !onClick}
       title={label}
       type="button"
-      whileTap={prefersReducedMotion ? undefined : { scale: 0.94 }}
+      transition={clipboardLayerTransition()}
       onClick={() => void onClick?.()}
     >
       {children}
@@ -567,7 +580,7 @@ function createClipRowLabel(clip: ClipItem, index: number, selected: boolean): s
   const usage = clip.useCount > 0 ? `${clip.useCount}次` : "新";
   const source = clip.sourceAppName ? ` · 来源 ${clip.sourceAppName}` : "";
   const state = clip.deletedAt ? ` · 回收站 ${relativeTime(clip.deletedAt)}` : "";
-  return `${key} ${clip.preview} ${metadata}${source}${state} · ${relativeTime(clip.createdAt)} ${usage}`;
+  return `${key} ${clip.preview} ${metadata}${source}${state} · ${formatCopyTime(clip.createdAt)} ${usage}`;
 }
 
 function kindLabel(kind: ClipItem["kind"]): string {
@@ -628,4 +641,30 @@ function relativeTime(value: string): string {
   }
 
   return `${Math.floor(diffHours / 24)} 天前`;
+}
+
+function formatCopyTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "复制于 --:--";
+  }
+
+  const today = new Date();
+  const sameDay = date.toDateString() === today.toDateString();
+  const timeText = new Intl.DateTimeFormat("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).format(date);
+
+  if (sameDay) {
+    return `复制于 ${timeText}`;
+  }
+
+  const dateText = new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit"
+  }).format(date);
+
+  return `复制于 ${dateText} ${timeText}`;
 }

@@ -240,6 +240,8 @@ pub fn update_settings(
             .is_some();
     let updates_panel_pin = patch.panel_pinned.is_some();
     let updates_launch_on_startup = patch.launch_on_startup.is_some();
+    let updates_tray_icon = patch.show_tray_icon.is_some();
+    let updates_taskbar_icon = patch.show_taskbar_icon.is_some();
     let mut store = state
         .store
         .lock()
@@ -255,6 +257,12 @@ pub fn update_settings(
     }
     if updates_launch_on_startup {
         system::apply_launch_on_startup(settings.launch_on_startup).map_err(CommandError::from)?;
+    }
+    if updates_tray_icon {
+        system::apply_tray_icon_visibility(&app, settings.show_tray_icon);
+    }
+    if updates_taskbar_icon {
+        system::apply_taskbar_icon_visibility(&app, settings.show_taskbar_icon);
     }
     let _ = app.emit(system::SETTINGS_CHANGED_EVENT, settings.clone());
     Ok(settings)

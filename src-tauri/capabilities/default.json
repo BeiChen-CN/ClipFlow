@@ -1,0 +1,17 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Default desktop permissions for ClipFlow",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-set-min-size",
+    "core:window:allow-set-size",
+    "core:window:allow-set-skip-taskbar",
+    "core:window:allow-start-dragging",
+    "core:window:allow-minimize",
+    "core:window:allow-outer-size",
+    "core:window:allow-scale-factor",
+    "core:window:allow-start-resize-dragging"
+  ]
+}

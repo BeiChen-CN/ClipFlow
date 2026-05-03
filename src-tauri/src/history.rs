@@ -525,6 +525,12 @@ impl ClipStore {
         if let Some(launch_on_startup) = patch.launch_on_startup {
             settings.launch_on_startup = launch_on_startup;
         }
+        if let Some(show_tray_icon) = patch.show_tray_icon {
+            settings.show_tray_icon = show_tray_icon;
+        }
+        if let Some(show_taskbar_icon) = patch.show_taskbar_icon {
+            settings.show_taskbar_icon = show_taskbar_icon;
+        }
         if let Some(color_preset) = patch.color_preset {
             settings.color_preset = color_preset;
         }
@@ -1268,5 +1274,36 @@ mod tests {
             settings.optional_filters,
             store.settings().expect("stored settings").optional_filters
         );
+    }
+
+    #[test]
+    fn persists_icon_visibility_settings() {
+        let mut store = ClipStore::in_memory().expect("store");
+
+        let hidden_settings = store
+            .update_settings(SettingsPatch {
+                show_tray_icon: Some(false),
+                show_taskbar_icon: Some(false),
+                ..SettingsPatch::default()
+            })
+            .expect("hide icons");
+
+        assert!(!hidden_settings.show_tray_icon);
+        assert!(!hidden_settings.show_taskbar_icon);
+        assert!(!store.settings().expect("stored hidden").show_tray_icon);
+        assert!(!store.settings().expect("stored hidden").show_taskbar_icon);
+
+        let visible_settings = store
+            .update_settings(SettingsPatch {
+                show_tray_icon: Some(true),
+                show_taskbar_icon: Some(true),
+                ..SettingsPatch::default()
+            })
+            .expect("show icons");
+
+        assert!(visible_settings.show_tray_icon);
+        assert!(visible_settings.show_taskbar_icon);
+        assert!(store.settings().expect("stored visible").show_tray_icon);
+        assert!(store.settings().expect("stored visible").show_taskbar_icon);
     }
 }

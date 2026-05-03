@@ -51,6 +51,8 @@ export interface Settings {
   retentionDays: number;
   trashRetentionDays: number;
   launchOnStartup: boolean;
+  showTrayIcon: boolean;
+  showTaskbarIcon: boolean;
   colorPreset: ColorPreset;
   customColor?: string;
   panelPinned?: boolean;
@@ -72,6 +74,8 @@ export interface SettingsPatch {
   retentionDays?: number;
   trashRetentionDays?: number;
   launchOnStartup?: boolean;
+  showTrayIcon?: boolean;
+  showTaskbarIcon?: boolean;
   colorPreset?: ColorPreset;
   customColor?: string;
   panelPinned?: boolean;

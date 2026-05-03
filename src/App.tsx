@@ -1,10 +1,20 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Activity, Database, Monitor, ShieldCheck } from "lucide-react";
+import { DesktopResizeZones } from "./components/DesktopResizeZones";
 import { SearchPanel } from "./components/SearchPanel";
 import { SettingsPage } from "./components/SettingsPage";
 import { createDemoClips, defaultSettings } from "./demoData";
+import {
+  applyDesktopWindowRoute,
+  initializeDesktopWindow,
+  minimizeDesktopWindow,
+  rememberDesktopWindowBounds,
+  startDesktopWindowDrag
+} from "./domain/desktopWindow";
+import type { DesktopWindowRoute } from "./domain/desktopWindow";
+import type { RouteDirection } from "./domain/motion";
 import { routeTransition, routeVariants } from "./domain/motion";
 import { createThemeStyle, normalizeHexColor, readCustomColor } from "./domain/theme";
 import type { ClipItem, OptionalClipFilter, Settings, SettingsPatch } from "./domain/types";
@@ -13,10 +23,14 @@ import "./styles/app.css";
 
 const desktopRuntime = tauriClient.isAvailable();
 const browserSettingsKey = "clipflow.settings.v1";
-const optionalFilterIds: OptionalClipFilter[] = ["link", "code", "richText", "recent", "trash"];
+const optionalFilterIds: OptionalClipFilter[] = ["link", "code", "richText", "recent"];
 
 export function App() {
   const [pathname, setPathname] = useState(() => window.location.pathname);
+  const pathnameRef = useRef(pathname);
+  const [routeDirection, setRouteDirection] = useState<RouteDirection>(() =>
+    resolveRouteDirection("/", pathname)
+  );
   const [clips, setClips] = useState<ClipItem[]>(() => (desktopRuntime ? [] : createDemoClips()));
   const [settings, setSettings] = useState<Settings>(() =>
     desktopRuntime ? defaultSettings : readBrowserSettings()
@@ -27,26 +41,97 @@ export function App() {
   const [notice, setNotice] = useState(desktopRuntime ? "正在连接桌面运行时" : "浏览器预览模式");
   const [focusSignal, setFocusSignal] = useState(0);
   const prefersReducedMotion = useReducedMotion();
+  const windowRouteRef = useRef<DesktopWindowRoute>(resolveDesktopWindowRoute(pathname));
+  const resizeTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+
+  const updatePathname = useCallback((nextPathname: string) => {
+    const previousPathname = pathnameRef.current;
+    if (previousPathname === nextPathname) {
+      return;
+    }
+
+    setRouteDirection(resolveRouteDirection(previousPathname, nextPathname));
+    pathnameRef.current = nextPathname;
+    setPathname(nextPathname);
+  }, []);
 
   useEffect(() => {
     function handlePopState() {
-      setPathname(window.location.pathname);
+      updatePathname(window.location.pathname);
     }
 
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
+  }, [updatePathname]);
+
+  useEffect(() => {
+    if (!desktopRuntime) {
+      return;
+    }
+
+    void initializeDesktopWindow(windowRouteRef.current).catch(reportDesktopWindowError);
+  }, []);
+
+  useEffect(() => {
+    if (!desktopRuntime) {
+      return;
+    }
+
+    const nextRoute = resolveDesktopWindowRoute(pathname);
+    const previousRoute = windowRouteRef.current;
+    if (previousRoute === nextRoute) {
+      return;
+    }
+
+    if (resizeTimerRef.current) {
+      window.clearTimeout(resizeTimerRef.current);
+      resizeTimerRef.current = null;
+    }
+
+    windowRouteRef.current = nextRoute;
+    void rememberDesktopWindowBounds(previousRoute)
+      .catch(reportDesktopWindowError)
+      .finally(() => {
+        void applyDesktopWindowRoute(nextRoute).catch(reportDesktopWindowError);
+      });
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!desktopRuntime) {
+      return;
+    }
+
+    const rememberCurrentRoute = () => {
+      if (resizeTimerRef.current) {
+        window.clearTimeout(resizeTimerRef.current);
+      }
+
+      resizeTimerRef.current = window.setTimeout(() => {
+        void rememberDesktopWindowBounds(windowRouteRef.current).catch(reportDesktopWindowError);
+      }, 180);
+    };
+
+    window.addEventListener("resize", rememberCurrentRoute);
+    return () => {
+      if (resizeTimerRef.current) {
+        window.clearTimeout(resizeTimerRef.current);
+        resizeTimerRef.current = null;
+      }
+      window.removeEventListener("resize", rememberCurrentRoute);
+      void rememberDesktopWindowBounds(windowRouteRef.current).catch(reportDesktopWindowError);
+    };
   }, []);
 
   const navigateTo = useCallback(
     (path: string) => {
-      if (path === pathname) {
+      if (path === pathnameRef.current) {
         return;
       }
 
       window.history.pushState({}, "", path);
-      setPathname(path);
+      updatePathname(path);
     },
-    [pathname]
+    [updatePathname]
   );
 
   const loadData = useCallback(async (silent = false) => {
@@ -59,14 +144,17 @@ export function App() {
     }
 
     try {
-      const [nextClips, nextSettings] = await Promise.all([
+      const [activeClips, trashClips, nextSettings] = await Promise.all([
         tauriClient.listClips(),
+        tauriClient.listClips("", "trash"),
         tauriClient.getSettings()
       ]);
-      setClips(nextClips);
+      setClips([...activeClips, ...trashClips]);
       setSettings(nextSettings);
       setError(null);
-      setNotice("桌面运行中");
+      if (!silent) {
+        setNotice("桌面运行中");
+      }
     } catch (nextError) {
       setError(readError(nextError));
     } finally {
@@ -274,22 +362,38 @@ export function App() {
 
   const handleRefresh = useCallback(() => {
     if (desktopRuntime) {
-      return runDesktopAction("历史已刷新", () => loadData(true));
+      return loadData(true);
     }
 
     setClips(createDemoClips());
     setNotice("演示数据已刷新");
     return Promise.resolve();
-  }, [loadData, runDesktopAction]);
+  }, [loadData]);
 
   const handleHidePanel = useCallback(() => {
     if (desktopRuntime) {
       return runDesktopAction("面板已隐藏", tauriClient.hidePanel);
     }
 
-    setNotice("浏览器预览保持显示");
+    navigateTo("/");
     return Promise.resolve();
-  }, [runDesktopAction]);
+  }, [navigateTo, runDesktopAction]);
+
+  const handleStartWindowDrag = useCallback(() => {
+    if (!desktopRuntime) {
+      return Promise.resolve();
+    }
+
+    return startDesktopWindowDrag().catch(reportDesktopWindowError);
+  }, []);
+
+  const handleMinimizeWindow = useCallback(() => {
+    if (!desktopRuntime) {
+      return Promise.resolve();
+    }
+
+    return minimizeDesktopWindow().catch(reportDesktopWindowError);
+  }, []);
 
   const handleTogglePanelPinned = useCallback(() => {
     return handleUpdateSettings({ panelPinned: !settings.panelPinned });
@@ -307,6 +411,7 @@ export function App() {
     ? { initial: false as const }
     : {
         animate: "animate",
+        custom: routeDirection,
         exit: "exit",
         initial: "initial",
         transition: routeTransition,
@@ -314,15 +419,23 @@ export function App() {
       };
 
   const routeContent = pathname === "/settings" ? (
-        <motion.div key="settings" className="route-motion-layer" {...routeMotionProps}>
+        <motion.div
+          key="settings"
+          className={desktopRuntime ? "route-motion-layer desktop-runtime" : "route-motion-layer"}
+          {...routeMotionProps}
+        >
       <SettingsPage
-        busyLabel={busyLabel}
+        clips={clips}
         clipsCount={activeClipsCount}
-        runtimeLabel={desktopRuntime ? "Tauri 桌面" : "浏览器预览"}
         settings={settings}
         style={themeStyle}
         onBack={handleBackToClipboard}
         onClearHistory={handleClearHistory}
+        onCloseWindow={handleHidePanel}
+        onMinimizeWindow={handleMinimizeWindow}
+        onPermanentlyDeleteClip={handlePermanentlyDeleteClip}
+        onRestoreClip={handleRestoreClip}
+        onStartWindowDrag={handleStartWindowDrag}
         onUpdateSettings={handleUpdateSettings}
       />
         </motion.div>
@@ -341,9 +454,7 @@ export function App() {
           settings={settings}
           loading={loading}
           error={error}
-          busyLabel={busyLabel}
           focusSignal={focusSignal}
-          runtimeLabel={desktopRuntime ? "Tauri 桌面" : "浏览器预览"}
           onClearHistory={handleClearHistory}
           onCopyClip={handleCopyClip}
           onDeleteClip={handleDeleteClip}
@@ -356,6 +467,7 @@ export function App() {
           onUpdateClipText={handleUpdateClipText}
           onRefresh={handleRefresh}
           onOpenSettings={handleOpenSettings}
+          onStartWindowDrag={handleStartWindowDrag}
         />
 
         <aside className="status-rail" aria-label="ClipFlow 状态">
@@ -370,9 +482,12 @@ export function App() {
   );
 
   return (
-    <AnimatePresence initial={false}>
-      {routeContent}
-    </AnimatePresence>
+    <>
+      <AnimatePresence initial={false} mode="popLayout" custom={routeDirection}>
+        {routeContent}
+      </AnimatePresence>
+      {desktopRuntime ? <DesktopResizeZones /> : null}
+    </>
   );
 }
 
@@ -396,7 +511,7 @@ function StatusTile({
 
 function createStats(clips: ClipItem[]) {
   return {
-    usedCount: clips.filter((clip) => clip.useCount > 0).length
+    usedCount: clips.filter((clip) => !clip.deletedAt && clip.useCount > 0).length
   };
 }
 
@@ -465,6 +580,21 @@ function writeBrowserSettings(settings: Settings) {
   }
 }
 
+function resolveDesktopWindowRoute(pathname: string): DesktopWindowRoute {
+  return pathname === "/settings" ? "settings" : "clipboard";
+}
+
+function resolveRouteDirection(fromPathname: string, toPathname: string): RouteDirection {
+  const fromRoute = resolveDesktopWindowRoute(fromPathname);
+  const toRoute = resolveDesktopWindowRoute(toPathname);
+
+  if (fromRoute === toRoute) {
+    return toRoute === "settings" ? "toSettings" : "toClipboard";
+  }
+
+  return toRoute === "settings" ? "toSettings" : "toClipboard";
+}
+
 function formatHistoryCount(count: number, limit: number): string {
   return limit === 0 ? `${count}/无限` : `${count}/${limit}`;
 }
@@ -479,4 +609,8 @@ function readError(error: unknown): string {
   }
 
   return String(error);
+}
+
+function reportDesktopWindowError(error: unknown) {
+  console.warn("ClipFlow desktop window action failed", error);
 }
