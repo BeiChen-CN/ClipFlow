@@ -1,0 +1,619 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ClipFlow 动效方案</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f7faf8;
+  --surface: #ffffff;
+  --surface-2: #eef5f2;
+  --text: #111817;
+  --muted: #586764;
+  --line: rgba(21, 35, 31, 0.12);
+  --primary: #0f766e;
+  --on-primary: #ffffff;
+  --shadow: 0 18px 55px rgba(17, 24, 39, 0.13);
+  --curve: cubic-bezier(.2, 0, 0, 1);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 20% 12%, rgba(15, 118, 110, .12), transparent 32%),
+    radial-gradient(circle at 86% 8%, rgba(217, 119, 6, .12), transparent 28%),
+    linear-gradient(135deg, #f8fbfa 0%, #f2f7f5 54%, #f8fafc 100%);
+  color: var(--text);
+}
+.motion-page {
+  width: min(1380px, calc(100vw - 48px));
+  margin: 0 auto;
+  padding: 34px 0 42px;
+}
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 24px;
+  margin-bottom: 22px;
+}
+.eyebrow {
+  color: var(--primary);
+  font-weight: 760;
+  font-size: 13px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+h1 {
+  margin: 6px 0 8px;
+  font-size: clamp(30px, 4vw, 54px);
+  letter-spacing: 0;
+  line-height: .98;
+}
+.lead {
+  margin: 0;
+  max-width: 780px;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.7;
+}
+.recommend {
+  flex: 0 0 250px;
+  border: 1px solid var(--line);
+  border-radius: 26px;
+  padding: 16px 18px;
+  background: rgba(255, 255, 255, .72);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, .08);
+}
+.recommend strong {
+  display: block;
+  margin-bottom: 5px;
+}
+.recommend span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+.card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, .82);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  position: relative;
+}
+.card.selected {
+  outline: 3px solid rgba(15, 118, 110, .22);
+}
+.card-header {
+  padding: 18px 18px 12px;
+}
+.card-label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 760;
+}
+.badge {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--primary);
+  font-weight: 840;
+}
+h2 {
+  margin: 12px 0 8px;
+  font-size: 21px;
+  letter-spacing: 0;
+}
+.card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.58;
+}
+.demo-stage {
+  height: 310px;
+  margin: 0 12px;
+  border-radius: 24px;
+  border: 1px solid rgba(15, 23, 42, .08);
+  background: linear-gradient(180deg, #f8fbfa 0%, #edf5f2 100%);
+  position: relative;
+  overflow: hidden;
+}
+.specs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 14px 18px 6px;
+}
+.specs span {
+  border: 1px solid rgba(15, 118, 110, .18);
+  border-radius: 999px;
+  padding: 6px 9px;
+  color: #175f58;
+  background: rgba(236, 253, 245, .72);
+  font-size: 12px;
+  font-weight: 680;
+}
+.actions {
+  display: flex;
+  gap: 8px;
+  padding: 12px 18px 18px;
+}
+button {
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 13px;
+  background: #e6f2ef;
+  color: #0f4f49;
+  font-weight: 760;
+  cursor: pointer;
+  transition: background 180ms var(--curve), transform 180ms var(--curve), color 180ms var(--curve);
+}
+button:hover {
+  background: #d6ebe6;
+}
+button:active {
+  transform: scale(.97);
+}
+button.primary {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+.card.selected button.primary {
+  background: #0b5f59;
+}
+.panel-mini {
+  position: absolute;
+  inset: 26px 22px 24px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, .92);
+  border: 1px solid rgba(15, 23, 42, .1);
+  box-shadow: 0 18px 36px rgba(15, 23, 42, .12);
+  overflow: hidden;
+}
+.mini-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 13px 14px;
+}
+.mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: #d9f2ee;
+  color: var(--primary);
+  font-weight: 840;
+}
+.dots {
+  display: flex;
+  gap: 5px;
+}
+.dots i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #cad8d5;
+}
+.search-mini {
+  margin: 0 14px 12px;
+  height: 40px;
+  border-radius: 999px;
+  background: #edf5f2;
+  border: 1px solid rgba(15, 23, 42, .08);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.search-mini::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  box-shadow: 6px 6px 0 -5px currentColor;
+}
+.rows {
+  display: grid;
+  gap: 8px;
+  padding: 0 14px;
+}
+.row-mini {
+  height: 48px;
+  border-radius: 16px;
+  background: #f7faf9;
+  border: 1px solid rgba(15, 23, 42, .07);
+  display: grid;
+  grid-template-columns: 32px 1fr 30px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+}
+.row-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  background: #dcece8;
+}
+.line {
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background: #bfceca;
+  width: 76%;
+}
+.line.short {
+  width: 48%;
+  margin-top: 7px;
+  opacity: .75;
+}
+.row-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 8px;
+  background: #e9f0ee;
+}
+.a .panel-mini {
+  animation: aPanel 5.2s var(--curve) infinite;
+}
+.a .search-mini {
+  animation: aSearch 5.2s var(--curve) infinite;
+}
+.a .row-mini {
+  animation: aRow 5.2s var(--curve) infinite;
+  transform-origin: top center;
+}
+.a .row-mini:nth-child(1) {
+  animation-delay: 70ms;
+}
+.a .row-mini:nth-child(2) {
+  animation-delay: 140ms;
+}
+.a .row-mini:nth-child(3) {
+  animation-delay: 210ms;
+}
+@keyframes aPanel {
+  0%, 100% { opacity: 0; transform: translateY(18px) scale(.982); border-radius: 34px; }
+  12%, 74% { opacity: 1; transform: translateY(0) scale(1); border-radius: 24px; }
+  88% { opacity: .96; transform: translateY(8px) scale(.992); }
+}
+@keyframes aSearch {
+  0%, 16%, 100% { opacity: 0; transform: translateY(10px); }
+  26%, 75% { opacity: 1; transform: translateY(0); }
+}
+@keyframes aRow {
+  0%, 18%, 100% { opacity: 0; transform: translateY(14px) scale(.985); }
+  32%, 72% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.b .demo-stage {
+  background: linear-gradient(135deg, #f8fafc 0%, #eef6ff 100%);
+}
+.b-tabs {
+  position: absolute;
+  top: 26px;
+  left: 22px;
+  right: 22px;
+  display: flex;
+  gap: 8px;
+}
+.b-tabs span {
+  flex: 1;
+  height: 34px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 760;
+  animation: bTab 6s var(--curve) infinite;
+}
+.b-tabs span:nth-child(2) {
+  animation-delay: 2s;
+}
+.b-tabs span:nth-child(3) {
+  animation-delay: 4s;
+}
+.b-page {
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  top: 76px;
+  bottom: 24px;
+  border-radius: 24px;
+  background: white;
+  border: 1px solid rgba(37, 99, 235, .12);
+  box-shadow: 0 16px 34px rgba(37, 99, 235, .12);
+  padding: 16px;
+  animation: bPage 6s var(--curve) infinite;
+}
+.b-page.two {
+  animation-delay: 2s;
+  background: #f8fbff;
+}
+.b-page.three {
+  animation-delay: 4s;
+  background: #f7faff;
+}
+.b-block {
+  height: 30px;
+  border-radius: 12px;
+  background: #dbeafe;
+  margin-bottom: 11px;
+}
+.b-block.wide {
+  height: 70px;
+  border-radius: 18px;
+  background: #eff6ff;
+}
+@keyframes bPage {
+  0%, 22%, 100% { opacity: 0; transform: translateX(34px) scale(.985); }
+  30%, 54% { opacity: 1; transform: translateX(0) scale(1); }
+  64% { opacity: 0; transform: translateX(-24px) scale(.99); }
+}
+@keyframes bTab {
+  0%, 28%, 100% { background: #dbeafe; color: #1d4ed8; }
+  33%, 56% { background: #2563eb; color: white; }
+}
+.c .demo-stage {
+  background: linear-gradient(135deg, #fbf7ef 0%, #f1f5f9 100%);
+}
+.c-edge {
+  position: absolute;
+  right: 0;
+  top: 64px;
+  width: 9px;
+  height: 168px;
+  border-radius: 999px 0 0 999px;
+  background: #d97706;
+  box-shadow: 0 0 0 8px rgba(217, 119, 6, .1);
+}
+.c-pointer {
+  position: absolute;
+  right: 10px;
+  top: 138px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #111827;
+  animation: cPointer 6s var(--curve) infinite;
+}
+.c-window {
+  position: absolute;
+  right: 16px;
+  top: 40px;
+  width: 235px;
+  height: 226px;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, .94);
+  border: 1px solid rgba(120, 53, 15, .12);
+  box-shadow: 0 24px 45px rgba(120, 53, 15, .17);
+  padding: 14px;
+  animation: cDock 6s var(--curve) infinite;
+}
+.c-window .row-mini {
+  grid-template-columns: 28px 1fr;
+  height: 44px;
+  margin-top: 8px;
+}
+.c-pin {
+  position: absolute;
+  right: 16px;
+  top: 15px;
+  width: 34px;
+  height: 34px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: #fef3c7;
+  color: #92400e;
+  font-weight: 900;
+  animation: cPin 6s var(--curve) infinite;
+}
+@keyframes cDock {
+  0%, 16%, 100% { transform: translateX(215px) scale(.98); opacity: .35; border-radius: 34px; }
+  34%, 70% { transform: translateX(0) scale(1); opacity: 1; border-radius: 28px; }
+  84% { transform: translateX(184px) scale(.985); opacity: .55; }
+}
+@keyframes cPointer {
+  0%, 18%, 100% { transform: translateX(-22px); opacity: 0; }
+  26%, 50% { transform: translateX(-104px); opacity: 1; }
+  70% { transform: translateX(-16px); opacity: 0; }
+}
+@keyframes cPin {
+  0%, 32%, 100% { transform: rotate(-8deg) scale(.92); opacity: .72; }
+  42%, 70% { transform: rotate(0deg) scale(1); opacity: 1; }
+}
+.d .demo-stage {
+  background: linear-gradient(135deg, #fff7f9 0%, #f8fafc 100%);
+}
+.d .panel-mini {
+  box-shadow: 0 20px 40px rgba(190, 18, 60, .12);
+}
+.d-focus {
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  top: 84px;
+  height: 64px;
+  border-radius: 22px;
+  background: rgba(255, 228, 230, .8);
+  box-shadow: 0 0 0 0 rgba(244, 63, 94, .16);
+  animation: dFocus 5.8s var(--curve) infinite;
+}
+.d .row-mini:nth-child(2) {
+  position: relative;
+  overflow: hidden;
+  animation: dRow 5.8s var(--curve) infinite;
+}
+.d .row-mini:nth-child(2)::after {
+  content: "已复制";
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #be123c;
+  color: white;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 760;
+  transform: translateX(76px);
+  animation: dToast 5.8s var(--curve) infinite;
+}
+.d-link {
+  position: absolute;
+  left: 38px;
+  bottom: 24px;
+  height: 32px;
+  padding: 0 13px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #ffe4e6;
+  color: #be123c;
+  font-size: 12px;
+  font-weight: 760;
+  animation: dLink 5.8s var(--curve) infinite;
+}
+@keyframes dFocus {
+  0%, 20%, 100% { transform: translateY(-46px) scale(.92); opacity: 0; box-shadow: 0 0 0 0 rgba(244, 63, 94, .16); }
+  34%, 64% { transform: translateY(0) scale(1); opacity: 1; box-shadow: 0 0 0 18px rgba(244, 63, 94, 0); }
+  74% { opacity: 0; }
+}
+@keyframes dRow {
+  0%, 26%, 100% { transform: scale(1); background: #f7faf9; }
+  38%, 62% { transform: scale(1.018); background: #fff1f2; }
+}
+@keyframes dToast {
+  0%, 38%, 100% { transform: translateX(80px); opacity: 0; }
+  48%, 68% { transform: translateX(0); opacity: 1; }
+}
+@keyframes dLink {
+  0%, 46%, 100% { transform: translateY(18px); opacity: 0; }
+  58%, 74% { transform: translateY(0); opacity: 1; }
+}
+.replay .demo-stage * {
+  animation-name: none !important;
+}
+.replay .demo-stage {
+  filter: saturate(1.08);
+}
+.note {
+  margin-top: 16px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+@media (max-width: 1180px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .demo-stage {
+    height: 292px;
+  }
+}
+@media (max-width: 720px) {
+  .motion-page {
+    width: min(100vw - 28px, 560px);
+    padding-top: 24px;
+  }
+  .topbar {
+    display: block;
+  }
+  .recommend {
+    margin-top: 14px;
+  }
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+}
+</style>
+</head>
+<body>
+<main class="motion-page">
+  <section class="topbar">
+    <div>
+      <div class="eyebrow">ClipFlow motion concepts</div>
+      <h1>动效方案选择</h1>
+      <p class="lead">这 4 个方向都保持 MD3 Expressive 的容器变形, 状态反馈和层级运动。请选择一个主方向, 也可以说 A+C 这种组合。</p>
+    </div>
+    <aside class="recommend"><strong>我的推荐: A + C</strong><span>A 作为全局基础动效, C 用在固定窗口, 边缘吸附和自动隐藏。这样优雅, 也最贴合剪切板工具的桌面属性。</span></aside>
+  </section>
+  <section class="grid" aria-label="动效方案列表">
+    <article class="card selected a" data-card="A">
+      <header class="card-header"><div class="card-label"><span class="badge">A</span>默认基础</div><h2>Tonal Lift</h2><p>面板轻抬进入, 列表按 35 到 55ms 错峰出现。整体克制, 接近原生 MD3E。</p></header>
+      <div class="demo-stage"><div class="panel-mini"><div class="mini-header"><div class="mark">C</div><div class="dots"><i></i><i></i><i></i></div></div><div class="search-mini">搜索文本, 文件, 链接</div><div class="rows"><div class="row-mini"><span class="row-icon"></span><span><i class="line"></i><i class="line short"></i></span><span class="row-dot"></span></div><div class="row-mini"><span class="row-icon"></span><span><i class="line"></i><i class="line short"></i></span><span class="row-dot"></span></div><div class="row-mini"><span class="row-icon"></span><span><i class="line"></i><i class="line short"></i></span><span class="row-dot"></span></div></div></div></div>
+      <div class="specs"><span>220ms enter</span><span>layout spring</span><span>stagger rows</span></div><div class="actions"><button class="primary" data-select="A">选择 A</button><button data-replay="A">重播</button></div>
+    </article>
+    <article class="card b" data-card="B">
+      <header class="card-header"><div class="card-label"><span class="badge">B</span>页面切换</div><h2>Shared Axis</h2><p>剪切板, 设置, 回收站之间沿 X 轴滑入滑出。适合强化页面层级和返回关系。</p></header>
+      <div class="demo-stage"><div class="b-tabs"><span>剪切板</span><span>设置</span><span>回收站</span></div><div class="b-page"><div class="b-block"></div><div class="b-block wide"></div><div class="b-block"></div></div><div class="b-page two"><div class="b-block wide"></div><div class="b-block"></div><div class="b-block"></div></div><div class="b-page three"><div class="b-block"></div><div class="b-block"></div><div class="b-block wide"></div></div></div>
+      <div class="specs"><span>AnimatePresence</span><span>exit before enter</span><span>80px axis</span></div><div class="actions"><button class="primary" data-select="B">选择 B</button><button data-replay="B">重播</button></div>
+    </article>
+    <article class="card c" data-card="C">
+      <header class="card-header"><div class="card-label"><span class="badge">C</span>桌面窗口</div><h2>Magnetic Dock</h2><p>窗口靠边时吸附成细边, 鼠标靠近后弹出。固定按钮和边缘隐藏会更有物理感。</p></header>
+      <div class="demo-stage"><div class="c-edge"></div><div class="c-pointer"></div><div class="c-window"><div class="c-pin">P</div><div class="mini-header"><div class="mark">C</div></div><div class="row-mini"><span class="row-icon"></span><span><i class="line"></i><i class="line short"></i></span></div><div class="row-mini"><span class="row-icon"></span><span><i class="line"></i><i class="line short"></i></span></div><div class="row-mini"><span class="row-icon"></span><span><i class="line"></i><i class="line short"></i></span></div></div></div>
+      <div class="specs"><span>spring 480ms</span><span>edge affordance</span><span>pin state</span></div><div class="actions"><button class="primary" data-select="C">选择 C</button><button data-replay="C">重播</button></div>
+    </article>
+    <article class="card d" data-card="D">
+      <header class="card-header"><div class="card-label"><span class="badge">D</span>命令反馈</div><h2>Focus Ripple</h2><p>搜索命中, 复制, 链接识别时用局部高亮和小型反馈胶囊。更强调操作确认。</p></header>
+      <div class="demo-stage"><div class="panel-mini"><div class="mini-header"><div class="mark">C</div><div class="dots"><i></i><i></i><i></i></div></div><div class="search-mini">tauri link</div><div class="d-focus"></div><div class="rows"><div class="row-mini"><span class="row-icon"></span><span><i class="line"></i><i class="line short"></i></span><span class="row-dot"></span></div><div class="row-mini"><span class="row-icon"></span><span><i class="line"></i><i class="line short"></i></span><span class="row-dot"></span></div><div class="row-mini"><span class="row-icon"></span><span><i class="line"></i><i class="line short"></i></span><span class="row-dot"></span></div></div><div class="d-link">https://tauri.app</div></div></div>
+      <div class="specs"><span>local highlight</span><span>copy pill</span><span>search mark</span></div><div class="actions"><button class="primary" data-select="D">选择 D</button><button data-replay="D">重播</button></div>
+    </article>
+  </section>
+  <p class="note">落地原则: 实际版本不会保留装饰性循环动画, 只在打开面板, 切换筛选, 搜索命中, 固定窗口, 删除/恢复/复制这些状态变化时触发。全部动效会尊重 prefers-reduced-motion。</p>
+</main>
+<script>
+const cards = Array.from(document.querySelectorAll(".card"));
+document.addEventListener("click", (event) => {
+  const select = event.target.closest("[data-select]");
+  const replay = event.target.closest("[data-replay]");
+  if (select) {
+    const id = select.dataset.select;
+    cards.forEach((card) => card.classList.toggle("selected", card.dataset.card === id));
+  }
+  if (replay) {
+    const card = replay.closest(".card");
+    card.classList.add("replay");
+    requestAnimationFrame(() => {
+      setTimeout(() => card.classList.remove("replay"), 60);
+    });
+  }
+});
+</script>
+</body>
+</html>

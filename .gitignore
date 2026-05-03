@@ -1,0 +1,15 @@
+node_modules/
+dist/
+dist-ssr/
+target/
+src-tauri/target/
+.vite/
+.idea/
+.vscode/
+*.log
+*.tmp
+*.local
+.env
+.env.*
+!.env.example
+

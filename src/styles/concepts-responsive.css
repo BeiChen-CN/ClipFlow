@@ -1,0 +1,32 @@
+@media (max-width: 1120px) {
+  .concept-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .concept-page {
+    padding: 16px;
+  }
+
+  .concept-hero {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .mock-sidebar,
+  .mock-compact {
+    grid-template-columns: 1fr;
+  }
+
+  .mock-sidebar nav,
+  .compact-tabs {
+    display: flex;
+    overflow-x: auto;
+  }
+
+  .hub-cards,
+  .compact-metrics {
+    grid-template-columns: 1fr;
+  }
+}
