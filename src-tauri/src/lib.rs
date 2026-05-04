@@ -29,6 +29,7 @@ pub fn run() {
             commands::purge_trash,
             commands::restore_clip,
             commands::show_panel,
+            commands::suppress_next_focus_loss_hide,
             commands::toggle_favorite,
             commands::update_clip_text,
             commands::update_settings

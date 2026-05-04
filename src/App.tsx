@@ -11,7 +11,8 @@ import {
   initializeDesktopWindow,
   minimizeDesktopWindow,
   rememberDesktopWindowBounds,
-  startDesktopWindowDrag
+  startDesktopWindowDrag,
+  suppressNextFocusLossHide
 } from "./domain/desktopWindow";
 import type { DesktopWindowRoute } from "./domain/desktopWindow";
 import type { RouteDirection } from "./domain/motion";
@@ -402,6 +403,10 @@ export function App() {
   }, [handleUpdateSettings, settings.panelPinned]);
 
   const handleOpenSettings = useCallback(() => {
+    if (desktopRuntime) {
+      void suppressNextFocusLossHide().catch(reportDesktopWindowError);
+    }
+
     navigateTo("/settings");
   }, [navigateTo]);
 

@@ -115,12 +115,22 @@ export async function applyDesktopWindowRoute(route: DesktopWindowRoute): Promis
   await setDesktopWindowSize(getCurrentWindow(), LogicalSize, resolveDesktopWindowSize(route));
 }
 
+export async function suppressNextFocusLossHide(): Promise<void> {
+  if (!isTauriAvailable()) {
+    return;
+  }
+
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("suppress_next_focus_loss_hide");
+}
+
 export async function startDesktopResizeDrag(direction: ResizeDirection): Promise<void> {
   if (!isTauriAvailable()) {
     return;
   }
 
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  await suppressNextFocusLossHide();
   await getCurrentWindow().startResizeDragging(direction);
 }
 
@@ -130,6 +140,7 @@ export async function startDesktopWindowDrag(): Promise<void> {
   }
 
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  await suppressNextFocusLossHide();
   await getCurrentWindow().startDragging();
 }
 

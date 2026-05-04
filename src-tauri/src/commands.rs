@@ -315,6 +315,12 @@ pub fn hide_panel(app: AppHandle) -> Result<(), CommandError> {
     Ok(())
 }
 
+#[tauri::command]
+pub fn suppress_next_focus_loss_hide() -> Result<(), CommandError> {
+    system::suppress_next_focus_loss_hide();
+    Ok(())
+}
+
 fn write_clipboard_item(item: &ClipItem) -> Result<(), ClipflowError> {
     let mut clipboard = arboard::Clipboard::new()?;
     match item.kind {

@@ -7,6 +7,7 @@ import {
   clearDesktopWindowBoundsMemory,
   readDesktopWindowBoundsMemory,
   resolveDesktopWindowSize,
+  suppressNextFocusLossHide,
   writeDesktopWindowBoundsMemory
 } from "./desktopWindow";
 
@@ -43,5 +44,9 @@ describe("desktop window sizing", () => {
     expect(readDesktopWindowBoundsMemory("settings")).toBeNull();
     expect(resolveDesktopWindowSize("clipboard")).toEqual(CLIPBOARD_WINDOW_SIZE);
     expect(resolveDesktopWindowSize("settings")).toEqual(SETTINGS_WINDOW_SIZE);
+  });
+
+  it("keeps focus-loss suppression as a browser-safe no-op", async () => {
+    await expect(suppressNextFocusLossHide()).resolves.toBeUndefined();
   });
 });

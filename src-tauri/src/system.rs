@@ -40,6 +40,7 @@ pub const PANEL_SHOWN_EVENT: &str = "panel-shown";
 pub const SETTINGS_CHANGED_EVENT: &str = "settings-changed";
 const TRAY_ID: &str = "clipflow-tray";
 const CLIPBOARD_CAPTURE_SUPPRESSION_MS: u64 = 1_500;
+const FOCUS_LOSS_HIDE_SUPPRESSION_MS: u64 = 900;
 
 struct ClipboardSuppression {
     signature: String,
@@ -47,6 +48,7 @@ struct ClipboardSuppression {
 }
 
 static CLIPBOARD_WRITE_SUPPRESSION: OnceLock<Mutex<Option<ClipboardSuppression>>> = OnceLock::new();
+static FOCUS_LOSS_HIDE_SUPPRESSION: OnceLock<Mutex<Option<Instant>>> = OnceLock::new();
 
 #[cfg(target_os = "windows")]
 static REMEMBERED_FOREGROUND_WINDOW: OnceLock<Mutex<Option<isize>>> = OnceLock::new();
@@ -108,6 +110,12 @@ pub fn hide_panel<R: Runtime>(app: &AppHandle<R>) {
     }
 }
 
+pub fn suppress_next_focus_loss_hide() {
+    remember_focus_loss_hide_suppression_until(
+        Instant::now() + Duration::from_millis(FOCUS_LOSS_HIDE_SUPPRESSION_MS),
+    );
+}
+
 fn setup_focus_loss_hide(app: &mut App) {
     let Some(window) = app.get_webview_window("main") else {
         return;
@@ -147,6 +155,10 @@ fn should_minimize_on_close<R: Runtime>(app: &AppHandle<R>) -> bool {
 }
 
 fn hide_clipboard_panel_on_focus_loss<R: Runtime>(app: &AppHandle<R>) {
+    if consume_focus_loss_hide_suppression() {
+        return;
+    }
+
     let Some(window) = app.get_webview_window("main") else {
         return;
     };
@@ -718,6 +730,10 @@ fn clipboard_suppression_slot() -> &'static Mutex<Option<ClipboardSuppression>> 
     CLIPBOARD_WRITE_SUPPRESSION.get_or_init(|| Mutex::new(None))
 }
 
+fn focus_loss_hide_suppression_slot() -> &'static Mutex<Option<Instant>> {
+    FOCUS_LOSS_HIDE_SUPPRESSION.get_or_init(|| Mutex::new(None))
+}
+
 fn remember_clipboard_write_signature(signature: String) {
     if let Ok(mut slot) = clipboard_suppression_slot().lock() {
         *slot = Some(ClipboardSuppression {
@@ -725,6 +741,24 @@ fn remember_clipboard_write_signature(signature: String) {
             expires_at: Instant::now() + Duration::from_millis(CLIPBOARD_CAPTURE_SUPPRESSION_MS),
         });
     }
+}
+
+fn remember_focus_loss_hide_suppression_until(expires_at: Instant) {
+    if let Ok(mut slot) = focus_loss_hide_suppression_slot().lock() {
+        *slot = Some(expires_at);
+    }
+}
+
+fn consume_focus_loss_hide_suppression() -> bool {
+    let Ok(mut slot) = focus_loss_hide_suppression_slot().lock() else {
+        return false;
+    };
+    let Some(expires_at) = *slot else {
+        return false;
+    };
+
+    *slot = None;
+    Instant::now() < expires_at
 }
 
 fn should_suppress_clipboard_capture(signature: &str) -> bool {
@@ -752,6 +786,13 @@ fn should_suppress_clipboard_capture(signature: &str) -> bool {
 #[cfg(test)]
 fn reset_clipboard_capture_suppression_for_test() {
     if let Ok(mut slot) = clipboard_suppression_slot().lock() {
+        *slot = None;
+    }
+}
+
+#[cfg(test)]
+fn reset_focus_loss_hide_suppression_for_test() {
+    if let Ok(mut slot) = focus_loss_hide_suppression_slot().lock() {
         *slot = None;
     }
 }
@@ -1009,5 +1050,23 @@ mod tests {
 
         assert!(should_suppress_clipboard_capture("text:hello"));
         assert!(!should_suppress_clipboard_capture("text:world"));
+    }
+
+    #[test]
+    fn internal_window_interaction_suppresses_one_focus_loss_hide() {
+        reset_focus_loss_hide_suppression_for_test();
+
+        suppress_next_focus_loss_hide();
+
+        assert!(consume_focus_loss_hide_suppression());
+        assert!(!consume_focus_loss_hide_suppression());
+    }
+
+    #[test]
+    fn expired_focus_loss_hide_suppression_is_ignored() {
+        reset_focus_loss_hide_suppression_for_test();
+        remember_focus_loss_hide_suppression_until(Instant::now() - Duration::from_millis(1));
+
+        assert!(!consume_focus_loss_hide_suppression());
     }
 }
