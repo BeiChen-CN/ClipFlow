@@ -99,6 +99,8 @@ pub struct Settings {
     #[serde(default = "default_custom_color")]
     pub custom_color: String,
     #[serde(default)]
+    pub motion_preset: MotionPreset,
+    #[serde(default)]
     pub panel_pinned: bool,
     #[serde(default)]
     pub window_position: WindowPositionMode,
@@ -133,6 +135,7 @@ impl Default for Settings {
             show_taskbar_icon: true,
             color_preset: ColorPreset::Teal,
             custom_color: default_custom_color(),
+            motion_preset: MotionPreset::A,
             panel_pinned: false,
             window_position: WindowPositionMode::Remember,
             copy_sound: false,
@@ -207,6 +210,21 @@ impl Default for ColorPreset {
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub enum MotionPreset {
+    A,
+    B,
+    C,
+    D,
+}
+
+impl Default for MotionPreset {
+    fn default() -> Self {
+        Self::A
+    }
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum WindowPositionMode {
     Remember,
     FollowMouse,
@@ -259,6 +277,7 @@ pub struct SettingsPatch {
     pub show_taskbar_icon: Option<bool>,
     pub color_preset: Option<ColorPreset>,
     pub custom_color: Option<String>,
+    pub motion_preset: Option<MotionPreset>,
     pub panel_pinned: Option<bool>,
     pub window_position: Option<WindowPositionMode>,
     pub copy_sound: Option<bool>,
@@ -319,6 +338,13 @@ mod tests {
     }
 
     #[test]
+    fn default_settings_use_motion_preset_a() {
+        let settings = Settings::default();
+
+        assert_eq!(MotionPreset::A, settings.motion_preset);
+    }
+
+    #[test]
     fn legacy_settings_without_icon_visibility_fields_default_to_visible() {
         let settings = serde_json::from_str::<Settings>(
             r#"{
@@ -331,5 +357,19 @@ mod tests {
 
         assert!(settings.show_tray_icon);
         assert!(settings.show_taskbar_icon);
+    }
+
+    #[test]
+    fn legacy_settings_without_motion_preset_default_to_a() {
+        let settings = serde_json::from_str::<Settings>(
+            r#"{
+                "launchOnStartup": false,
+                "historyLimit": 100,
+                "retentionDays": 30
+            }"#,
+        )
+        .expect("legacy settings");
+
+        assert_eq!(MotionPreset::A, settings.motion_preset);
     }
 }

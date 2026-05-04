@@ -19,6 +19,7 @@ export const defaultSettings: Settings = {
   showTaskbarIcon: true,
   colorPreset: "teal",
   customColor: "#0d9488",
+  motionPreset: "a",
   panelPinned: false,
   windowPosition: "remember",
   copySound: false,

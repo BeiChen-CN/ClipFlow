@@ -22,6 +22,7 @@ const settings: Settings = {
   showTaskbarIcon: true,
   colorPreset: "teal",
   customColor: "#0d9488",
+  motionPreset: "a",
   windowPosition: "remember",
   copySound: false,
   searchBoxPosition: "top",
@@ -280,6 +281,17 @@ describe("SettingsPage", () => {
     expect(onUpdateSettings).toHaveBeenCalledWith({ launchOnStartup: true });
     expect(onUpdateSettings).toHaveBeenCalledWith({ colorPreset: "blue" });
     expect(onUpdateSettings).toHaveBeenLastCalledWith({ shortcuts: { showPanel: "Ctrl+Space" } });
+  });
+
+  it("updates the motion preset from general settings", async () => {
+    const user = userEvent.setup();
+    const { onUpdateSettings } = renderSettingsPage();
+    const nav = within(screen.getByRole("navigation", { name: "设置分类" }));
+
+    await user.click(nav.getByRole("button", { name: /通用/ }));
+    await user.click(screen.getByRole("radio", { name: "弹性" }));
+
+    expect(onUpdateSettings).toHaveBeenCalledWith({ motionPreset: "d" });
   });
 
   it("updates the custom color preset", async () => {

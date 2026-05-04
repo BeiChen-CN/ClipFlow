@@ -15,14 +15,15 @@ import {
 } from "./domain/desktopWindow";
 import type { DesktopWindowRoute } from "./domain/desktopWindow";
 import type { RouteDirection } from "./domain/motion";
-import { routeTransition, routeVariants } from "./domain/motion";
+import { createMotionSettings } from "./domain/motion";
 import { createThemeStyle, normalizeHexColor, readCustomColor } from "./domain/theme";
-import type { ClipItem, OptionalClipFilter, Settings, SettingsPatch } from "./domain/types";
+import type { ClipItem, MotionPreset, OptionalClipFilter, Settings, SettingsPatch } from "./domain/types";
 import { tauriClient } from "./tauriClient";
 import "./styles/app.css";
 
 const desktopRuntime = tauriClient.isAvailable();
 const browserSettingsKey = "clipflow.settings.v1";
+const motionPresetIds: MotionPreset[] = ["a", "b", "c", "d"];
 const optionalFilterIds: OptionalClipFilter[] = ["link", "code", "richText", "recent"];
 
 export function App() {
@@ -190,6 +191,7 @@ export function App() {
   const stats = useMemo(() => createStats(clips), [clips]);
   const activeClipsCount = useMemo(() => clips.filter((clip) => !clip.deletedAt).length, [clips]);
   const themeStyle = useMemo(() => createThemeStyle(settings), [settings]);
+  const routeMotion = useMemo(() => createMotionSettings(settings.motionPreset), [settings.motionPreset]);
 
   const runDesktopAction = useCallback(
     async (label: string, action: () => Promise<unknown>) => {
@@ -414,14 +416,15 @@ export function App() {
         custom: routeDirection,
         exit: "exit",
         initial: "initial",
-        transition: routeTransition,
-        variants: routeVariants
+        transition: routeMotion.routeTransition,
+        variants: routeMotion.routeVariants
       };
 
   const routeContent = pathname === "/settings" ? (
         <motion.div
           key="settings"
           className={desktopRuntime ? "route-motion-layer desktop-runtime" : "route-motion-layer"}
+          data-motion-preset={settings.motionPreset}
           {...routeMotionProps}
         >
       <SettingsPage
@@ -444,6 +447,7 @@ export function App() {
       key="clipboard"
       className={desktopRuntime ? "app-frame desktop-runtime" : "app-frame"}
       data-color={settings.colorPreset}
+      data-motion-preset={settings.motionPreset}
       data-theme={settings.themeMode}
       style={themeStyle}
       {...routeMotionProps}
@@ -526,6 +530,9 @@ function applySettingsPatch(settings: Settings, patch: SettingsPatch): Settings 
     },
     colorPreset: patch.colorPreset ?? settings.colorPreset,
     customColor: normalizeHexColor(patch.customColor) ?? readCustomColor(settings),
+    motionPreset: normalizeMotionPreset(patch.motionPreset)
+      ?? normalizeMotionPreset(settings.motionPreset)
+      ?? defaultSettings.motionPreset,
     panelPinned: patch.panelPinned !== undefined
       ? patch.panelPinned
       : settings.panelPinned,
@@ -543,6 +550,10 @@ function applySettingsPatch(settings: Settings, patch: SettingsPatch): Settings 
       : normalizeOptionalFilters(settings.optionalFilters),
     edgeAutoHide: patch.edgeAutoHide !== undefined ? patch.edgeAutoHide : settings.edgeAutoHide
   };
+}
+
+function normalizeMotionPreset(value: unknown): MotionPreset | null {
+  return motionPresetIds.includes(value as MotionPreset) ? value as MotionPreset : null;
 }
 
 function clampTrashRetentionDays(value: number): number {

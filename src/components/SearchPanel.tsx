@@ -23,13 +23,7 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, PointerEvent } from "react";
 import { filterClips, moveSelection } from "../domain/clipSearch";
 import { playCopySound } from "../domain/copySound";
-import {
-  clipboardLayerDelays,
-  clipboardLayerMotion,
-  clipboardLayerTransition,
-  clipboardPanelMotion,
-  settingsSectionTransition
-} from "../domain/motion";
+import { createMotionSettings } from "../domain/motion";
 import { matchesShortcut } from "../domain/shortcuts";
 import type { ClipFilter, ClipItem, OptionalClipFilter, Settings } from "../domain/types";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -123,8 +117,9 @@ export function SearchPanel({
   const deferredQuery = useDeferredValue(query);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const prefersReducedMotion = useReducedMotion();
-  const layerInitial = prefersReducedMotion ? false : clipboardLayerMotion.initial;
-  const layerAnimate = prefersReducedMotion ? undefined : clipboardLayerMotion.animate;
+  const motionSettings = useMemo(() => createMotionSettings(settings.motionPreset), [settings.motionPreset]);
+  const layerInitial = prefersReducedMotion ? false : motionSettings.clipboardLayerMotion.initial;
+  const layerAnimate = prefersReducedMotion ? undefined : motionSettings.clipboardLayerMotion.animate;
 
   const visibleFilters = useMemo(() => {
     const enabledOptionalFilters = new Set(settings.optionalFilters ?? []);
@@ -349,17 +344,18 @@ export function SearchPanel({
       data-search-position={settings.searchBoxPosition}
       data-pinned={settings.panelPinned ? "true" : undefined}
       data-edge-auto-hide={settings.edgeAutoHide ? "true" : undefined}
+      data-motion-preset={settings.motionPreset}
       aria-label="ClipFlow 剪切板搜索面板"
-      initial={prefersReducedMotion ? false : clipboardPanelMotion.initial}
-      animate={prefersReducedMotion ? undefined : clipboardPanelMotion.animate}
-      transition={clipboardPanelMotion.transition}
+      initial={prefersReducedMotion ? false : motionSettings.clipboardPanelMotion.initial}
+      animate={prefersReducedMotion ? undefined : motionSettings.clipboardPanelMotion.animate}
+      transition={motionSettings.clipboardPanelMotion.transition}
       onKeyDown={handleKeyDown}
     >
       <motion.header
         className="panel-header"
         initial={layerInitial}
         animate={layerAnimate}
-        transition={clipboardLayerTransition(clipboardLayerDelays.header)}
+        transition={motionSettings.clipboardLayerTransition(motionSettings.clipboardLayerDelays.header)}
         onPointerDown={handleWindowDragPointerDown}
       >
         <div className="brand-lockup">
@@ -375,19 +371,19 @@ export function SearchPanel({
         </div>
 
         <div className="panel-actions">
-          <IconButton label="刷新历史" onClick={onRefresh}>
+          <IconButton label="刷新历史" motionPreset={settings.motionPreset} onClick={onRefresh}>
             <RefreshCw size={17} />
           </IconButton>
-          <IconButton danger disabled={activeClips.length === 0 || !onClearHistory} label="清空历史" onClick={handleClearHistory}>
+          <IconButton danger disabled={activeClips.length === 0 || !onClearHistory} label="清空历史" motionPreset={settings.motionPreset} onClick={handleClearHistory}>
             <Trash2 size={17} />
           </IconButton>
-          <IconButton active={Boolean(settings.panelPinned)} label={settings.panelPinned ? "取消固定" : "固定在最上层"} onClick={onTogglePanelPinned}>
+          <IconButton active={Boolean(settings.panelPinned)} label={settings.panelPinned ? "取消固定" : "固定在最上层"} motionPreset={settings.motionPreset} onClick={onTogglePanelPinned}>
             <Pin size={17} />
           </IconButton>
-          <IconButton label="设置" onClick={onOpenSettings ?? openSettingsPage}>
+          <IconButton label="设置" motionPreset={settings.motionPreset} onClick={onOpenSettings ?? openSettingsPage}>
             <SlidersHorizontal size={17} />
           </IconButton>
-          <IconButton label="隐藏面板" onClick={onHidePanel}>
+          <IconButton label="隐藏面板" motionPreset={settings.motionPreset} onClick={onHidePanel}>
             <X size={17} />
           </IconButton>
         </div>
@@ -408,7 +404,7 @@ export function SearchPanel({
         aria-label="剪切板分类"
         initial={layerInitial}
         animate={layerAnimate}
-        transition={clipboardLayerTransition(clipboardLayerDelays.filter)}
+        transition={motionSettings.clipboardLayerTransition(motionSettings.clipboardLayerDelays.filter)}
       >
         {visibleFilters.map((item) => {
           const FilterIcon = item.icon;
@@ -420,7 +416,7 @@ export function SearchPanel({
               role="tab"
               aria-selected={item.id === filter}
               layout
-              transition={settingsSectionTransition}
+              transition={motionSettings.settingsSectionTransition}
               onClick={() => setFilter(item.id)}
             >
               <FilterIcon aria-hidden="true" size={14} strokeWidth={2.35} />
@@ -434,7 +430,7 @@ export function SearchPanel({
         className="clip-list-frame"
         initial={layerInitial}
         animate={layerAnimate}
-        transition={clipboardLayerTransition(clipboardLayerDelays.list)}
+        transition={motionSettings.clipboardLayerTransition(motionSettings.clipboardLayerDelays.list)}
       >
         <div className="clip-list" role="listbox" aria-busy={loading} aria-label="剪切板历史">
           {loading && displayedClips.length === 0 ? (
@@ -448,10 +444,11 @@ export function SearchPanel({
                   key={clip.id}
                   clip={clip}
                   draftText={draftText}
-                  entryBaseDelay={clipboardLayerDelays.rows}
+                  entryBaseDelay={motionSettings.clipboardLayerDelays.rows}
                   editing={editingClipId === clip.id}
                   index={index}
                   motionEnabled={!prefersReducedMotion}
+                  motionPreset={settings.motionPreset}
                   query={query}
                   onCancelEdit={cancelEditing}
                   onDraftTextChange={setDraftText}
@@ -493,7 +490,7 @@ export function SearchPanel({
         className="panel-footer"
         initial={layerInitial}
         animate={layerAnimate}
-        transition={clipboardLayerTransition(clipboardLayerDelays.footer)}
+        transition={motionSettings.clipboardLayerTransition(motionSettings.clipboardLayerDelays.footer)}
       >
         <span>{visibleClips.length} 项匹配</span>
         <div className="footer-actions">
@@ -503,6 +500,7 @@ export function SearchPanel({
                 <IconButton
                   label="恢复剪切板"
                   disabled={!onRestoreClip}
+                  motionPreset={settings.motionPreset}
                   onClick={() =>
                     runClipAction(
                       onRestoreClip ?? onDeleteClip,
@@ -517,6 +515,7 @@ export function SearchPanel({
                   danger
                   label="彻底删除"
                   disabled={!onPermanentlyDeleteClip}
+                  motionPreset={settings.motionPreset}
                   onClick={() =>
                     runClipAction(
                       onPermanentlyDeleteClip ?? onDeleteClip,
@@ -533,6 +532,7 @@ export function SearchPanel({
               <>
                 <IconButton
                   label="复制选中项"
+                  motionPreset={settings.motionPreset}
                   onClick={() => runClipAction(onCopyClip, selectedClip.id, "copied")}
                 >
                   <Copy size={16} />
@@ -540,6 +540,7 @@ export function SearchPanel({
                 <IconButton
                   danger
                   label="移入回收站"
+                  motionPreset={settings.motionPreset}
                   onClick={() =>
                     runClipAction(
                       onDeleteClip,
@@ -554,7 +555,7 @@ export function SearchPanel({
               </>
             )
           ) : null}
-          <Feedback feedback={feedback} />
+          <Feedback feedback={feedback} motionPreset={settings.motionPreset} />
         </div>
       </motion.footer>
       <ConfirmDialog
@@ -562,6 +563,7 @@ export function SearchPanel({
         title="删除剪切板内容"
         description={confirmation?.message ?? ""}
         confirmLabel="删除"
+        motionPreset={settings.motionPreset}
         onCancel={() => settleDestructiveConfirmation(false)}
         onConfirm={() => settleDestructiveConfirmation(true)}
       />
@@ -571,9 +573,10 @@ export function SearchPanel({
   function renderSearchStrip() {
     return (
       <SearchStrip
-        entryDelay={clipboardLayerDelays.search}
+        entryDelay={motionSettings.clipboardLayerDelays.search}
         inputRef={searchInputRef}
         loading={loading}
+        motionPreset={settings.motionPreset}
         query={query}
         onQueryChange={setQuery}
       />

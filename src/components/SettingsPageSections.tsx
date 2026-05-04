@@ -14,6 +14,7 @@ import {
   Palette,
   Power,
   Search,
+  Sparkles,
   Sun,
   Trash2,
   Volume2
@@ -24,6 +25,7 @@ import type {
   ClipItem,
   ColorPreset,
   MousePasteTrigger,
+  MotionPreset,
   OptionalClipFilter,
   SearchBoxPosition,
   Settings,
@@ -32,7 +34,8 @@ import type {
   WindowPositionMode
 } from "../domain/types";
 import { ClipRow } from "./SearchPanelParts";
-import { InfoRow, NumberRow, RowTitle, SelectRow, SwitchRow } from "./SettingsPageRows";
+import { motionPresetOptions } from "../domain/motion";
+import { InfoRow, NumberRow, RowTitle, SegmentedRow, SelectRow, SwitchRow } from "./SettingsPageRows";
 
 type SectionId = "clipboard" | "history" | "trash" | "general" | "hotkeys" | "about";
 type UpdateSettings = (patch: SettingsPatch) => void | Promise<void>;
@@ -87,6 +90,11 @@ const mousePasteOptions: Array<{ id: MousePasteTrigger; label: string }> = [
   { id: "singleClick", label: "单击" },
   { id: "doubleClick", label: "双击" }
 ];
+
+const motionPresetRowOptions: Array<{ id: MotionPreset; label: string }> = motionPresetOptions.map((option) => ({
+  id: option.id,
+  label: option.label
+}));
 
 const optionalFilterOptions: Array<{ id: OptionalClipFilter; label: string }> = [
   { id: "link", label: "链接" },
@@ -279,6 +287,7 @@ function TrashSettings({
                 editing={false}
                 index={index}
                 motionEnabled={false}
+                motionPreset={settings.motionPreset}
                 query=""
                 pasteTrigger={settings.mousePasteTrigger}
                 selected={false}
@@ -362,6 +371,14 @@ function GeneralSettings({ settings, onUpdateSettings }: SettingsContentProps) {
           })}
         </div>
       </div>
+      <SegmentedRow
+        description="选择全局动效风格, 稳态保留当前体验"
+        icon={Sparkles}
+        label="动效方案"
+        options={motionPresetRowOptions}
+        value={settings.motionPreset}
+        onChange={(motionPreset) => onUpdateSettings({ motionPreset })}
+      />
       <div className="settings-control-row stacked">
         <RowTitle description="选择 ClipFlow 的强调色" icon={Palette} label="预设颜色" />
         <div className="settings-color-grid" role="radiogroup" aria-label="预设颜色">

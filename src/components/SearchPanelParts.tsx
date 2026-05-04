@@ -16,18 +16,13 @@ import {
   Trash2
 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { forwardRef, useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type { ReactNode } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { extractUrls } from "../domain/clipSearch";
-import {
-  clipboardLayerMotion,
-  clipboardLayerTransition,
-  clipEditorMotion,
-  clipRowTransition
-} from "../domain/motion";
-import type { ClipFilter, ClipItem, MousePasteTrigger } from "../domain/types";
+import { createMotionSettings } from "../domain/motion";
+import type { ClipFilter, ClipItem, MotionPreset, MousePasteTrigger } from "../domain/types";
 
 type PanelAction = () => void | Promise<void>;
 
@@ -35,16 +30,19 @@ export function SearchStrip({
   entryDelay = 0,
   inputRef,
   loading,
+  motionPreset = "a",
   onQueryChange,
   query
 }: {
   entryDelay?: number;
   inputRef: RefObject<HTMLInputElement>;
   loading: boolean;
+  motionPreset?: MotionPreset;
   onQueryChange: (value: string) => void;
   query: string;
 }) {
   const prefersReducedMotion = useReducedMotion();
+  const motionSettings = useMemo(() => createMotionSettings(motionPreset), [motionPreset]);
   const hasStatus = loading;
 
   return (
@@ -52,9 +50,9 @@ export function SearchStrip({
       className="search-strip"
       data-search-active={query.trim() ? "true" : undefined}
       data-has-status={hasStatus ? "true" : undefined}
-      initial={prefersReducedMotion ? false : clipboardLayerMotion.initial}
-      animate={prefersReducedMotion ? undefined : clipboardLayerMotion.animate}
-      transition={clipboardLayerTransition(entryDelay)}
+      initial={prefersReducedMotion ? false : motionSettings.clipboardLayerMotion.initial}
+      animate={prefersReducedMotion ? undefined : motionSettings.clipboardLayerMotion.animate}
+      transition={motionSettings.clipboardLayerTransition(entryDelay)}
     >
       <Search aria-hidden="true" className="search-icon" />
       <input
@@ -97,6 +95,7 @@ type ClipRowProps = {
   editing: boolean;
   index: number;
   motionEnabled: boolean;
+  motionPreset?: MotionPreset;
   onCancelEdit: () => void;
   onDraftTextChange: (value: string) => void;
   onEditStart: (clip: ClipItem) => void;
@@ -121,6 +120,7 @@ export const ClipRow = forwardRef<HTMLDivElement, ClipRowProps>(function ClipRow
     editing,
     index,
     motionEnabled,
+    motionPreset = "a",
     onCancelEdit,
     onDraftTextChange,
     onEditStart,
@@ -144,6 +144,7 @@ export const ClipRow = forwardRef<HTMLDivElement, ClipRowProps>(function ClipRow
   const previousEditingRef = useRef(isEditing);
   const isEditorClosing = editorClosing || (!isEditing && previousEditingRef.current);
   const isEditorExpanded = isEditing || isEditorClosing;
+  const motionSettings = useMemo(() => createMotionSettings(motionPreset), [motionPreset]);
 
   useEffect(() => {
     if (isEditing) {
@@ -203,7 +204,7 @@ export const ClipRow = forwardRef<HTMLDivElement, ClipRowProps>(function ClipRow
       initial={motionEnabled ? { opacity: 0, y: 3 } : false}
       animate={motionEnabled ? { opacity: 1, y: 0 } : undefined}
       exit={motionEnabled ? { opacity: 0, y: -2 } : undefined}
-      transition={clipRowTransition(index, entryBaseDelay, isEditorExpanded)}
+      transition={motionSettings.clipRowTransition(index, entryBaseDelay, isEditorExpanded)}
       onMouseEnter={onMouseEnter}
       onClick={handleSelect}
       onDoubleClick={handleDoubleClick}
@@ -218,9 +219,9 @@ export const ClipRow = forwardRef<HTMLDivElement, ClipRowProps>(function ClipRow
             <motion.span
               key="editor"
               className="clip-editor"
-              initial={motionEnabled ? clipEditorMotion.editorInitial : false}
-              animate={motionEnabled ? clipEditorMotion.editorAnimate : undefined}
-              exit={motionEnabled ? clipEditorMotion.editorExit : undefined}
+              initial={motionEnabled ? motionSettings.clipEditorMotion.editorInitial : false}
+              animate={motionEnabled ? motionSettings.clipEditorMotion.editorAnimate : undefined}
+              exit={motionEnabled ? motionSettings.clipEditorMotion.editorExit : undefined}
             >
               <textarea
                 autoFocus
@@ -242,9 +243,9 @@ export const ClipRow = forwardRef<HTMLDivElement, ClipRowProps>(function ClipRow
             <motion.span
               key="content"
               className="clip-preview"
-              initial={motionEnabled ? clipEditorMotion.contentInitial : false}
-              animate={motionEnabled ? clipEditorMotion.contentAnimate : undefined}
-              exit={motionEnabled ? clipEditorMotion.contentExit : undefined}
+              initial={motionEnabled ? motionSettings.clipEditorMotion.contentInitial : false}
+              animate={motionEnabled ? motionSettings.clipEditorMotion.contentAnimate : undefined}
+              exit={motionEnabled ? motionSettings.clipEditorMotion.contentExit : undefined}
             >
               <span className="clip-text">
                 {renderHighlightedText(clip.preview, query, onOpenLink)}
@@ -441,12 +442,17 @@ export function EmptyState({ filter, query }: { filter: ClipFilter; query: strin
 }
 
 export function Feedback({
-  feedback
+  feedback,
+  motionPreset = "a"
 }: {
   feedback: "idle" | "copied" | "pasted" | "moved" | "restored" | "deleted";
+  motionPreset?: MotionPreset;
 }) {
+  const prefersReducedMotion = useReducedMotion();
+  const motionSettings = useMemo(() => createMotionSettings(motionPreset), [motionPreset]);
+
   if (feedback === "idle") {
-    return null;
+    return <AnimatePresence mode="wait" initial={false}>{null}</AnimatePresence>;
   }
 
   const labels = {
@@ -466,10 +472,20 @@ export function Feedback({
           : Check;
 
   return (
-    <span className="footer-pill active">
-      <Icon aria-hidden="true" size={15} />
-      {labels[feedback]}
-    </span>
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.span
+        key={feedback}
+        className="footer-pill active"
+        initial={prefersReducedMotion ? false : "initial"}
+        animate={prefersReducedMotion ? undefined : "animate"}
+        exit={prefersReducedMotion ? undefined : "exit"}
+        variants={motionSettings.feedbackVariants}
+        transition={motionSettings.feedbackTransition}
+      >
+        <Icon aria-hidden="true" size={15} />
+        {labels[feedback]}
+      </motion.span>
+    </AnimatePresence>
   );
 }
 
@@ -478,6 +494,7 @@ export function IconButton({
   children,
   danger = false,
   disabled = false,
+  motionPreset = "a",
   label,
   onClick
 }: {
@@ -485,17 +502,22 @@ export function IconButton({
   children: ReactNode;
   danger?: boolean;
   disabled?: boolean;
+  motionPreset?: MotionPreset;
   label: string;
   onClick?: PanelAction;
 }) {
+  const motionSettings = useMemo(() => createMotionSettings(motionPreset), [motionPreset]);
+
   return (
     <motion.button
       aria-label={label}
       className={createIconButtonClass(danger, active)}
       disabled={disabled || !onClick}
+      whileHover={disabled || !onClick ? undefined : motionSettings.buttonHover}
+      whileTap={disabled || !onClick ? undefined : motionSettings.buttonTap}
       title={label}
       type="button"
-      transition={clipboardLayerTransition()}
+      transition={motionSettings.magneticSpring}
       onClick={() => void onClick?.()}
     >
       {children}

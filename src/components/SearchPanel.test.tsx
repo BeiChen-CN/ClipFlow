@@ -22,6 +22,7 @@ const settings: Settings = {
   showTaskbarIcon: true,
   colorPreset: "teal",
   customColor: "#0d9488",
+  motionPreset: "a",
   windowPosition: "remember",
   copySound: false,
   searchBoxPosition: "top",

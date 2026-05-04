@@ -1,11 +1,14 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Trash2, X } from "lucide-react";
+import { createMotionSettings } from "../domain/motion";
+import type { MotionPreset } from "../domain/types";
 
 interface ConfirmDialogProps {
   cancelLabel?: string;
   confirmLabel?: string;
   description: string;
+  motionPreset?: MotionPreset;
   open: boolean;
   title: string;
   onCancel: () => void;
@@ -16,11 +19,14 @@ export function ConfirmDialog({
   cancelLabel = "取消",
   confirmLabel = "删除",
   description,
+  motionPreset = "a",
   open,
   title,
   onCancel,
   onConfirm
 }: ConfirmDialogProps) {
+  const motionSettings = useMemo(() => createMotionSettings(motionPreset), [motionPreset]);
+
   useEffect(() => {
     if (!open) {
       return;
@@ -42,21 +48,22 @@ export function ConfirmDialog({
       {open ? (
         <motion.div
           className="confirm-dialog-backdrop"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.14 }}
+          data-motion-preset={motionPreset}
+          initial={motionSettings.confirmDialogMotion.backdropInitial}
+          animate={motionSettings.confirmDialogMotion.backdropAnimate}
+          exit={motionSettings.confirmDialogMotion.backdropExit}
+          transition={motionSettings.confirmDialogMotion.backdropTransition}
           onClick={onCancel}
         >
           <motion.div
             aria-describedby="confirm-dialog-description"
             aria-labelledby="confirm-dialog-title"
             className="confirm-dialog"
-            initial={{ opacity: 0, y: 10, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.98 }}
+            initial={motionSettings.confirmDialogMotion.dialogInitial}
+            animate={motionSettings.confirmDialogMotion.dialogAnimate}
+            exit={motionSettings.confirmDialogMotion.dialogExit}
             role="alertdialog"
-            transition={{ type: "tween", duration: 0.16, ease: [0.2, 0, 0, 1] }}
+            transition={motionSettings.confirmDialogMotion.dialogTransition}
             onClick={(event) => event.stopPropagation()}
           >
             <div className="confirm-dialog-icon" aria-hidden="true">

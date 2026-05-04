@@ -3,7 +3,7 @@ import type { CSSProperties, PointerEvent } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowLeft, Clipboard, Clock3, Info, Keyboard, Minus, MonitorCog, Trash2, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { panelMotion, settingsSectionTransition, settingsSectionVariants } from "../domain/motion";
+import { createMotionSettings } from "../domain/motion";
 import type { ClipItem, Settings, SettingsPatch } from "../domain/types";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { SettingsContent } from "./SettingsPageSections";
@@ -48,6 +48,10 @@ export function SettingsPage(props: SettingsPageProps) {
   const [activeId, setActiveId] = useState<SectionId>("clipboard");
   const [confirmation, setConfirmation] = useState<DestructiveConfirmation | null>(null);
   const prefersReducedMotion = useReducedMotion();
+  const motionSettings = useMemo(
+    () => createMotionSettings(props.settings.motionPreset),
+    [props.settings.motionPreset]
+  );
   const activeSection = useMemo(
     () => sections.find((section) => section.id === activeId) ?? defaultSection,
     [activeId]
@@ -92,14 +96,15 @@ export function SettingsPage(props: SettingsPageProps) {
     <main
       className="settings-page-shell"
       data-color={props.settings.colorPreset}
+      data-motion-preset={props.settings.motionPreset}
       data-theme={props.settings.themeMode}
       style={props.style}
     >
       <motion.div
         className="settings-page"
-        initial={prefersReducedMotion ? false : panelMotion.initial}
-        animate={prefersReducedMotion ? undefined : panelMotion.animate}
-        transition={panelMotion.transition}
+        initial={prefersReducedMotion ? false : motionSettings.panelMotion.initial}
+        animate={prefersReducedMotion ? undefined : motionSettings.panelMotion.animate}
+        transition={motionSettings.panelMotion.transition}
       >
         <aside className="settings-sidebar">
           <button className="settings-back-button" type="button" onClick={props.onBack}>
@@ -136,7 +141,7 @@ export function SettingsPage(props: SettingsPageProps) {
               aria-hidden="true"
               initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
               animate={prefersReducedMotion ? undefined : { opacity: 1, y: 0 }}
-              transition={settingsSectionTransition}
+              transition={motionSettings.settingsSectionTransition}
             >
               <ActiveIcon size={22} />
             </motion.span>
@@ -180,8 +185,8 @@ export function SettingsPage(props: SettingsPageProps) {
               initial={prefersReducedMotion ? false : "initial"}
               animate={prefersReducedMotion ? undefined : "animate"}
               exit={prefersReducedMotion ? undefined : "exit"}
-              variants={settingsSectionVariants}
-              transition={settingsSectionTransition}
+              variants={motionSettings.settingsSectionVariants}
+              transition={motionSettings.settingsSectionTransition}
             >
               <SettingsContent
                 activeId={activeId}
@@ -196,6 +201,7 @@ export function SettingsPage(props: SettingsPageProps) {
           title="删除回收站内容"
           description={confirmation?.message ?? ""}
           confirmLabel="删除"
+          motionPreset={props.settings.motionPreset}
           onCancel={() => settleDestructiveConfirmation(false)}
           onConfirm={() => settleDestructiveConfirmation(true)}
         />

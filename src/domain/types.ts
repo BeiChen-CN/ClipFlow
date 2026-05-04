@@ -11,6 +11,7 @@ export type ColorPreset =
   | "custom";
 export type MousePasteTrigger = "singleClick" | "doubleClick";
 export type OptionalClipFilter = "link" | "code" | "richText" | "recent" | "trash";
+export type MotionPreset = "a" | "b" | "c" | "d";
 export type SearchBoxPosition = "top" | "bottom" | "hidden";
 export type WindowPositionMode = "remember" | "followMouse" | "screenCenter";
 
@@ -55,6 +56,7 @@ export interface Settings {
   showTaskbarIcon: boolean;
   colorPreset: ColorPreset;
   customColor?: string;
+  motionPreset: MotionPreset;
   panelPinned?: boolean;
   windowPosition: WindowPositionMode;
   copySound: boolean;
@@ -78,6 +80,7 @@ export interface SettingsPatch {
   showTaskbarIcon?: boolean;
   colorPreset?: ColorPreset;
   customColor?: string;
+  motionPreset?: MotionPreset;
   panelPinned?: boolean;
   windowPosition?: WindowPositionMode;
   copySound?: boolean;

@@ -563,6 +563,9 @@ impl ClipStore {
         if let Some(custom_color) = patch.custom_color {
             settings.custom_color = custom_color;
         }
+        if let Some(motion_preset) = patch.motion_preset {
+            settings.motion_preset = motion_preset;
+        }
         if let Some(panel_pinned) = patch.panel_pinned {
             settings.panel_pinned = panel_pinned;
         }
@@ -964,7 +967,7 @@ fn db_to_kind(value: &str) -> ClipKind {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{OptionalClipFilter, SettingsPatch};
+    use crate::models::{MotionPreset, OptionalClipFilter, SettingsPatch};
 
     #[test]
     fn ignores_blank_text() {
@@ -1390,5 +1393,23 @@ mod tests {
         assert!(visible_settings.show_taskbar_icon);
         assert!(store.settings().expect("stored visible").show_tray_icon);
         assert!(store.settings().expect("stored visible").show_taskbar_icon);
+    }
+
+    #[test]
+    fn persists_motion_preset_settings() {
+        let mut store = ClipStore::in_memory().expect("store");
+
+        let settings = store
+            .update_settings(SettingsPatch {
+                motion_preset: Some(MotionPreset::D),
+                ..SettingsPatch::default()
+            })
+            .expect("motion preset");
+
+        assert_eq!(MotionPreset::D, settings.motion_preset);
+        assert_eq!(
+            MotionPreset::D,
+            store.settings().expect("stored settings").motion_preset
+        );
     }
 }
