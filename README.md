@@ -22,17 +22,20 @@
 
 ## 截图
 
-<p align="center">
-  <img src="https://free.picui.cn/free/2026/05/04/69f8a2989fae3.png" width="960" alt="ClipFlow clipboard screenshot" />
-  <br />
-  <sub>剪切板主面板</sub>
-</p>
-
-<p align="center">
-  <img src="https://free.picui.cn/free/2026/05/04/69f8a29881fe6.png" width="960" alt="ClipFlow settings screenshot" />
-  <br />
-  <sub>设置页</sub>
-</p>
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="https://free.picui.cn/free/2026/05/04/69f8a2989fae3.png" width="420" alt="ClipFlow clipboard screenshot" />
+      <br />
+      <sub>剪切板主面板</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="https://free.picui.cn/free/2026/05/04/69f8a29881fe6.png" width="420" alt="ClipFlow settings screenshot" />
+      <br />
+      <sub>设置页</sub>
+    </td>
+  </tr>
+</table>
 
 ## 功能亮点
 

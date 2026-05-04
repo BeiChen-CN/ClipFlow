@@ -120,6 +120,8 @@ export function SearchPanel({
   const motionSettings = useMemo(() => createMotionSettings(settings.motionPreset), [settings.motionPreset]);
   const layerInitial = prefersReducedMotion ? false : motionSettings.clipboardLayerMotion.initial;
   const layerAnimate = prefersReducedMotion ? undefined : motionSettings.clipboardLayerMotion.animate;
+  const panelMotionKey = `${settings.motionPreset}-${focusSignal}`;
+  const resolvedPanelMotionKey = prefersReducedMotion ? `${settings.motionPreset}-reduced` : panelMotionKey;
 
   const visibleFilters = useMemo(() => {
     const enabledOptionalFilters = new Set(settings.optionalFilters ?? []);
@@ -340,11 +342,13 @@ export function SearchPanel({
 
   return (
     <motion.section
+      key={resolvedPanelMotionKey}
       className="clip-shell"
       data-search-position={settings.searchBoxPosition}
       data-pinned={settings.panelPinned ? "true" : undefined}
       data-edge-auto-hide={settings.edgeAutoHide ? "true" : undefined}
       data-motion-preset={settings.motionPreset}
+      data-panel-motion-key={resolvedPanelMotionKey}
       aria-label="ClipFlow 剪切板搜索面板"
       initial={prefersReducedMotion ? false : motionSettings.clipboardPanelMotion.initial}
       animate={prefersReducedMotion ? undefined : motionSettings.clipboardPanelMotion.animate}

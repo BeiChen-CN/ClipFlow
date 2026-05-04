@@ -27,4 +27,32 @@ describe("motion presets", () => {
 
     expect(new Set(signatures).size).toBe(4);
   });
+
+  it("uses the selected slow elastic clipboard opening cadence for preset D", () => {
+    const motion = createMotionSettings("d");
+
+    expect(motion.clipboardPanelMotion.initial).toEqual({ opacity: 0, y: 20, scale: 0.955 });
+    expect(motion.clipboardPanelMotion.animate).toEqual({
+      opacity: 1,
+      y: [20, -2, 0],
+      scale: [0.955, 1.014, 1]
+    });
+    expect(motion.clipboardPanelMotion.transition).toMatchObject({
+      type: "tween",
+      duration: 0.66
+    });
+    expect(motion.clipboardLayerDelays).toEqual({
+      header: 0,
+      search: 0.055,
+      filter: 0.11,
+      list: 0.165,
+      rows: 0.19,
+      footer: 0.23
+    });
+    expect(motion.clipRowTransition(3, motion.clipboardLayerDelays.rows, false)).toMatchObject({
+      type: "tween",
+      duration: 0.34,
+      delay: 0.28
+    });
+  });
 });

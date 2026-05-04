@@ -121,6 +121,28 @@ describe("SearchPanel", () => {
     expect(screen.getByRole("searchbox", { name: "搜索剪切板历史" })).toHaveFocus();
   });
 
+  it("changes the panel motion key on focus signal without clearing the query", async () => {
+    const user = userEvent.setup();
+    const panelSettings = { ...settings, motionPreset: "d" as const };
+    const baseProps = {
+      clips,
+      settings: panelSettings,
+      onCopyClip: vi.fn(),
+      onDeleteClip: vi.fn(),
+      onPasteClip: vi.fn()
+    };
+    const { container, rerender } = render(<SearchPanel {...baseProps} focusSignal={0} />);
+
+    await user.type(container.querySelector(".search-input") as HTMLInputElement, "material");
+
+    expect(container.querySelector(".clip-shell")).toHaveAttribute("data-panel-motion-key", "d-0");
+
+    rerender(<SearchPanel {...baseProps} focusSignal={1} />);
+
+    expect(container.querySelector(".clip-shell")).toHaveAttribute("data-panel-motion-key", "d-1");
+    expect(container.querySelector(".search-input")).toHaveValue("material");
+  });
+
   it("keeps runtime and transient busy labels out of the clipboard chrome", () => {
     render(
       <SearchPanel

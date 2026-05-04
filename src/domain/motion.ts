@@ -29,11 +29,14 @@ type MotionProfile = {
   clipboardLayerY: number;
   clipboardPanelScale: number;
   clipboardPanelY: number;
+  clipboardPanelOvershootScale?: number;
+  clipboardPanelOvershootY?: number;
   confirmDialogScale: number;
   confirmDialogY: number;
   delayMultiplier: number;
   ease: EaseCurve;
   expressiveEase: EaseCurve;
+  layerDelays?: LayerDelays;
   panelScale: number;
   panelY: number;
   routeScale: number;
@@ -169,37 +172,42 @@ const profiles: Record<MotionPreset, MotionProfile> = {
   d: {
     buttonHoverScale: 1.025,
     buttonTapScale: 0.94,
-    clipboardLayerY: 5,
-    clipboardPanelScale: 0.988,
-    clipboardPanelY: 12,
+    clipboardLayerY: 8,
+    clipboardPanelScale: 0.955,
+    clipboardPanelY: 20,
+    clipboardPanelOvershootScale: 1.014,
+    clipboardPanelOvershootY: -2,
     confirmDialogScale: 0.972,
     confirmDialogY: 12,
-    delayMultiplier: 0.95,
+    delayMultiplier: 1,
     ease: md3Ease,
     expressiveEase: md3ExpressiveEase,
+    layerDelays: {
+      header: 0,
+      search: 0.055,
+      filter: 0.11,
+      list: 0.165,
+      rows: 0.19,
+      footer: 0.23
+    },
     panelScale: 0.99,
     panelY: 10,
     routeScale: 0.982,
     routeX: 16,
-    rowDelayStep: 0.004,
-    rowMaxDelay: 0.03,
+    rowDelayStep: 0.03,
+    rowMaxDelay: 0.09,
     sectionY: 7,
-    spring: {
-      damping: 24,
-      mass: 0.82,
-      stiffness: 360
-    },
     timings: {
-      clipboardLayer: 0.12,
-      clipboardPanel: 0.2,
-      confirmDialog: 0.16,
-      editor: 0.16,
+      clipboardLayer: 0.38,
+      clipboardPanel: 0.66,
+      confirmDialog: 0.24,
+      editor: 0.24,
       editorExit: 0.11,
-      iconButton: 0.12,
-      panel: 0.17,
-      route: 0.26,
-      row: 0.1,
-      section: 0.13
+      iconButton: 0.16,
+      panel: 0.28,
+      route: 0.38,
+      row: 0.34,
+      section: 0.22
     }
   }
 };
@@ -207,6 +215,22 @@ const profiles: Record<MotionPreset, MotionProfile> = {
 export function createMotionSettings(preset: MotionPreset = "a") {
   const profile = profiles[preset] ?? profiles.a;
   const settingsSectionTransition = transitionFor(profile, profile.timings.section, profile.ease);
+  const clipboardLayerDelays = profile.layerDelays ?? scaleDelays(baseLayerDelays, profile.delayMultiplier);
+  const hasClipboardPanelOvershoot =
+    profile.clipboardPanelOvershootY !== undefined || profile.clipboardPanelOvershootScale !== undefined;
+  const clipboardPanelMotion = {
+    initial: { opacity: 0, y: profile.clipboardPanelY, scale: profile.clipboardPanelScale },
+    animate: hasClipboardPanelOvershoot
+      ? {
+          opacity: 1,
+          y: [profile.clipboardPanelY, profile.clipboardPanelOvershootY ?? 0, 0],
+          scale: [profile.clipboardPanelScale, profile.clipboardPanelOvershootScale ?? 1, 1]
+        }
+      : { opacity: 1, y: 0, scale: 1 },
+    transition: hasClipboardPanelOvershoot
+      ? tween(profile.timings.clipboardPanel, profile.expressiveEase)
+      : transitionFor(profile, profile.timings.clipboardPanel, profile.expressiveEase)
+  };
   const clipEditorMotion = {
     contentInitial: { opacity: 0 },
     contentAnimate: {
@@ -234,18 +258,14 @@ export function createMotionSettings(preset: MotionPreset = "a") {
   return {
     buttonHover: { y: -1, scale: profile.buttonHoverScale },
     buttonTap: { scale: profile.buttonTapScale },
-    clipboardLayerDelays: scaleDelays(baseLayerDelays, profile.delayMultiplier),
+    clipboardLayerDelays,
     clipboardLayerMotion: {
       initial: { opacity: 0, y: profile.clipboardLayerY },
       animate: { opacity: 1, y: 0 }
     },
     clipboardLayerTransition: (delay = 0) =>
       transitionFor(profile, profile.timings.clipboardLayer, profile.expressiveEase, delay),
-    clipboardPanelMotion: {
-      initial: { opacity: 0, y: profile.clipboardPanelY, scale: profile.clipboardPanelScale },
-      animate: { opacity: 1, y: 0, scale: 1 },
-      transition: transitionFor(profile, profile.timings.clipboardPanel, profile.expressiveEase)
-    },
+    clipboardPanelMotion,
     clipEditorMotion,
     clipRowTransition: (index: number, baseDelay = 0, editing = false) => {
       if (editing) {
