@@ -57,6 +57,8 @@ export interface Settings {
   colorPreset: ColorPreset;
   customColor?: string;
   motionPreset: MotionPreset;
+  autoSortDuplicates: boolean;
+  minimizeOnClose: boolean;
   panelPinned?: boolean;
   windowPosition: WindowPositionMode;
   copySound: boolean;
@@ -81,6 +83,8 @@ export interface SettingsPatch {
   colorPreset?: ColorPreset;
   customColor?: string;
   motionPreset?: MotionPreset;
+  autoSortDuplicates?: boolean;
+  minimizeOnClose?: boolean;
   panelPinned?: boolean;
   windowPosition?: WindowPositionMode;
   copySound?: boolean;

@@ -61,10 +61,10 @@ impl ClipStore {
         let file_count = optional_count(file_paths.len());
         let hash = content_hash(&format!("{}:{normalized}", kind_to_db(kind)));
         let existing = self.existing_clip_by_hash(&hash)?;
-        if existing
-            .as_ref()
-            .is_some_and(|clip| clip.deleted_at.is_none())
-        {
+        if let Some(existing_clip) = existing.as_ref().filter(|clip| clip.deleted_at.is_none()) {
+            if settings.auto_sort_duplicates {
+                return self.promote_existing_clip(&existing_clip.id).map(Some);
+            }
             return Ok(None);
         }
 
@@ -129,10 +129,10 @@ impl ClipStore {
         let now = now();
         let hash = content_hash(&format!("rich:{normalized}:{rich_html}"));
         let existing = self.existing_clip_by_hash(&hash)?;
-        if existing
-            .as_ref()
-            .is_some_and(|clip| clip.deleted_at.is_none())
-        {
+        if let Some(existing_clip) = existing.as_ref().filter(|clip| clip.deleted_at.is_none()) {
+            if settings.auto_sort_duplicates {
+                return self.promote_existing_clip(&existing_clip.id).map(Some);
+            }
             return Ok(None);
         }
 
@@ -196,10 +196,10 @@ impl ClipStore {
         let text = format!("图片 {width} × {height}");
         let hash = content_hash_bytes("image", width, height, &bytes);
         let existing = self.existing_clip_by_hash(&hash)?;
-        if existing
-            .as_ref()
-            .is_some_and(|clip| clip.deleted_at.is_none())
-        {
+        if let Some(existing_clip) = existing.as_ref().filter(|clip| clip.deleted_at.is_none()) {
+            if settings.auto_sort_duplicates {
+                return self.promote_existing_clip(&existing_clip.id).map(Some);
+            }
             return Ok(None);
         }
 
@@ -273,10 +273,10 @@ impl ClipStore {
         let preview = file_preview(&file_paths);
         let hash = content_hash(&format!("file:{}", file_paths.join("\n")));
         let existing = self.existing_clip_by_hash(&hash)?;
-        if existing
-            .as_ref()
-            .is_some_and(|clip| clip.deleted_at.is_none())
-        {
+        if let Some(existing_clip) = existing.as_ref().filter(|clip| clip.deleted_at.is_none()) {
+            if settings.auto_sort_duplicates {
+                return self.promote_existing_clip(&existing_clip.id).map(Some);
+            }
             return Ok(None);
         }
 
@@ -366,6 +366,18 @@ impl ClipStore {
         let updated = self.conn.execute(
             "UPDATE clips SET last_used_at = ?1, use_count = use_count + 1 WHERE id = ?2",
             params![now, id],
+        )?;
+        if updated == 0 {
+            return Err(ClipflowError::ClipNotFound(id.to_string()));
+        }
+
+        self.get_clip(id)
+    }
+
+    fn promote_existing_clip(&mut self, id: &str) -> Result<ClipItem, ClipflowError> {
+        let updated = self.conn.execute(
+            "UPDATE clips SET created_at = ?1 WHERE id = ?2 AND deleted_at IS NULL",
+            params![now(), id],
         )?;
         if updated == 0 {
             return Err(ClipflowError::ClipNotFound(id.to_string()));
@@ -565,6 +577,12 @@ impl ClipStore {
         }
         if let Some(motion_preset) = patch.motion_preset {
             settings.motion_preset = motion_preset;
+        }
+        if let Some(auto_sort_duplicates) = patch.auto_sort_duplicates {
+            settings.auto_sort_duplicates = auto_sort_duplicates;
+        }
+        if let Some(minimize_on_close) = patch.minimize_on_close {
+            settings.minimize_on_close = minimize_on_close;
         }
         if let Some(panel_pinned) = patch.panel_pinned {
             settings.panel_pinned = panel_pinned;
@@ -1025,6 +1043,44 @@ mod tests {
         assert!(duplicate.is_none());
         assert_eq!(1, items.len());
         assert_eq!("2026-05-02T10:00:00.000Z", items[0].created_at);
+    }
+
+    #[test]
+    fn auto_sort_duplicates_moves_existing_active_text_to_front_when_enabled() {
+        let mut store = ClipStore::in_memory().expect("store");
+
+        let first = store.add_text("hello world").expect("first").expect("item");
+        let second = store.add_text("later clip").expect("second").expect("item");
+        store
+            .conn
+            .execute(
+                "UPDATE clips SET created_at = ?1 WHERE id = ?2",
+                params!["2026-05-02T10:00:00.000Z", first.id],
+            )
+            .expect("age first");
+        store
+            .conn
+            .execute(
+                "UPDATE clips SET created_at = ?1 WHERE id = ?2",
+                params!["2026-05-02T10:05:00.000Z", second.id],
+            )
+            .expect("age second");
+        store
+            .update_settings(SettingsPatch {
+                auto_sort_duplicates: Some(true),
+                ..SettingsPatch::default()
+            })
+            .expect("settings");
+
+        let duplicate = store
+            .add_text(" hello   world ")
+            .expect("duplicate")
+            .expect("promoted duplicate");
+        let items = store.list(None, ClipFilter::All).expect("list");
+        let ids = items.into_iter().map(|clip| clip.id).collect::<Vec<_>>();
+
+        assert_eq!(first.id, duplicate.id);
+        assert_eq!(vec![first.id, second.id], ids);
     }
 
     #[test]

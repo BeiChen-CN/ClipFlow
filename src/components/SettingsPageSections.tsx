@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { KeyboardEvent } from "react";
 import {
+  ArrowUpWideNarrow,
   Bell,
   Clipboard,
   Clock3,
@@ -11,6 +12,7 @@ import {
   Moon,
   Monitor,
   MousePointerClick,
+  Minimize2,
   Palette,
   Power,
   Search,
@@ -154,6 +156,13 @@ function ClipboardSettings({ settings, onUpdateSettings }: SettingsContentProps)
         options={mousePasteOptions}
         value={settings.mousePasteTrigger}
         onChange={(mousePasteTrigger) => onUpdateSettings({ mousePasteTrigger })}
+      />
+      <SwitchRow
+        checked={settings.autoSortDuplicates}
+        description="复制已存在内容时自动移动到列表最前"
+        icon={ArrowUpWideNarrow}
+        label="重复内容置顶"
+        onChange={(autoSortDuplicates) => onUpdateSettings({ autoSortDuplicates })}
       />
       <SwitchRow
         checked={settings.deleteConfirmation}
@@ -342,6 +351,13 @@ function GeneralSettings({ settings, onUpdateSettings }: SettingsContentProps) {
         icon={Monitor}
         label="显示任务栏图标"
         onChange={(showTaskbarIcon) => onUpdateSettings({ showTaskbarIcon })}
+      />
+      <SwitchRow
+        checked={settings.minimizeOnClose}
+        description="点击关闭按钮时隐藏窗口并保留托盘运行"
+        icon={Minimize2}
+        label="关闭最小化到托盘"
+        onChange={(minimizeOnClose) => onUpdateSettings({ minimizeOnClose })}
       />
       <SwitchRow
         checked={settings.launchOnStartup}

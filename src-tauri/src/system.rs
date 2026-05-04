@@ -114,8 +114,8 @@ fn setup_focus_loss_hide(app: &mut App) {
     };
 
     let app_handle = app.handle().clone();
-    window.on_window_event(move |event| {
-        if let WindowEvent::Focused(false) = event {
+    window.on_window_event(move |event| match event {
+        WindowEvent::Focused(false) => {
             let app_for_thread = app_handle.clone();
             let app_for_closure = app_handle.clone();
             if let Err(error) = app_for_thread
@@ -124,7 +124,26 @@ fn setup_focus_loss_hide(app: &mut App) {
                 eprintln!("failed to process panel focus loss: {error}");
             }
         }
+        WindowEvent::CloseRequested { api, .. } => {
+            if should_minimize_on_close(&app_handle) {
+                api.prevent_close();
+                let app_for_thread = app_handle.clone();
+                let app_for_closure = app_handle.clone();
+                if let Err(error) =
+                    app_for_thread.run_on_main_thread(move || hide_panel(&app_for_closure))
+                {
+                    eprintln!("failed to minimize panel on close: {error}");
+                }
+            }
+        }
+        _ => {}
     });
+}
+
+fn should_minimize_on_close<R: Runtime>(app: &AppHandle<R>) -> bool {
+    read_settings(app)
+        .map(|settings| settings.minimize_on_close)
+        .unwrap_or(true)
 }
 
 fn hide_clipboard_panel_on_focus_loss<R: Runtime>(app: &AppHandle<R>) {

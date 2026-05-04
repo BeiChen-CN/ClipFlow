@@ -23,6 +23,8 @@ const settings: Settings = {
   colorPreset: "teal",
   customColor: "#0d9488",
   motionPreset: "a",
+  autoSortDuplicates: false,
+  minimizeOnClose: true,
   windowPosition: "remember",
   copySound: false,
   searchBoxPosition: "top",
@@ -158,6 +160,7 @@ describe("SettingsPage", () => {
     await user.click(screen.getByRole("option", { name: "底部" }));
     await user.click(screen.getByRole("button", { name: /自动粘贴/ }));
     await user.click(screen.getByRole("option", { name: "单击" }));
+    await user.click(screen.getByRole("switch", { name: "重复内容置顶" }));
     await user.click(screen.getByRole("switch", { name: "删除确认" }));
     await user.click(screen.getByRole("switch", { name: "边缘自动隐藏" }));
 
@@ -165,6 +168,7 @@ describe("SettingsPage", () => {
     expect(onUpdateSettings).toHaveBeenCalledWith({ copySound: true });
     expect(onUpdateSettings).toHaveBeenCalledWith({ searchBoxPosition: "bottom" });
     expect(onUpdateSettings).toHaveBeenCalledWith({ mousePasteTrigger: "singleClick" });
+    expect(onUpdateSettings).toHaveBeenCalledWith({ autoSortDuplicates: true });
     expect(onUpdateSettings).toHaveBeenCalledWith({ deleteConfirmation: false });
     expect(onUpdateSettings).toHaveBeenLastCalledWith({ edgeAutoHide: true });
   });
@@ -246,17 +250,21 @@ describe("SettingsPage", () => {
     await user.click(nav.getByRole("button", { name: /通用/ }));
     const traySwitch = screen.getByRole("switch", { name: "显示菜单栏图标" });
     const taskbarSwitch = screen.getByRole("switch", { name: "显示任务栏图标" });
+    const minimizeOnCloseSwitch = screen.getByRole("switch", { name: "关闭最小化到托盘" });
 
     expect(traySwitch).toHaveAttribute("aria-checked", "true");
     expect(taskbarSwitch).toHaveAttribute("aria-checked", "true");
+    expect(minimizeOnCloseSwitch).toHaveAttribute("aria-checked", "true");
     expect(screen.getByText("控制 Windows 托盘/通知区图标是否显示")).toBeInTheDocument();
     expect(screen.getByText("控制主窗口是否显示在 Windows 任务栏")).toBeInTheDocument();
 
     await user.click(traySwitch);
     await user.click(taskbarSwitch);
+    await user.click(minimizeOnCloseSwitch);
 
     expect(onUpdateSettings).toHaveBeenCalledWith({ showTrayIcon: false });
-    expect(onUpdateSettings).toHaveBeenLastCalledWith({ showTaskbarIcon: false });
+    expect(onUpdateSettings).toHaveBeenCalledWith({ showTaskbarIcon: false });
+    expect(onUpdateSettings).toHaveBeenLastCalledWith({ minimizeOnClose: false });
   });
 
   it("updates startup, color preset, and custom shortcut settings", async () => {

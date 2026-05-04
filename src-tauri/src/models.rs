@@ -101,6 +101,10 @@ pub struct Settings {
     #[serde(default)]
     pub motion_preset: MotionPreset,
     #[serde(default)]
+    pub auto_sort_duplicates: bool,
+    #[serde(default = "default_true")]
+    pub minimize_on_close: bool,
+    #[serde(default)]
     pub panel_pinned: bool,
     #[serde(default)]
     pub window_position: WindowPositionMode,
@@ -136,6 +140,8 @@ impl Default for Settings {
             color_preset: ColorPreset::Teal,
             custom_color: default_custom_color(),
             motion_preset: MotionPreset::A,
+            auto_sort_duplicates: false,
+            minimize_on_close: true,
             panel_pinned: false,
             window_position: WindowPositionMode::Remember,
             copy_sound: false,
@@ -278,6 +284,8 @@ pub struct SettingsPatch {
     pub color_preset: Option<ColorPreset>,
     pub custom_color: Option<String>,
     pub motion_preset: Option<MotionPreset>,
+    pub auto_sort_duplicates: Option<bool>,
+    pub minimize_on_close: Option<bool>,
     pub panel_pinned: Option<bool>,
     pub window_position: Option<WindowPositionMode>,
     pub copy_sound: Option<bool>,
@@ -338,6 +346,14 @@ mod tests {
     }
 
     #[test]
+    fn default_settings_use_requested_window_and_sorting_behavior() {
+        let settings = Settings::default();
+
+        assert!(!settings.auto_sort_duplicates);
+        assert!(settings.minimize_on_close);
+    }
+
+    #[test]
     fn default_settings_use_motion_preset_a() {
         let settings = Settings::default();
 
@@ -371,5 +387,20 @@ mod tests {
         .expect("legacy settings");
 
         assert_eq!(MotionPreset::A, settings.motion_preset);
+    }
+
+    #[test]
+    fn legacy_settings_without_new_behavior_fields_use_requested_defaults() {
+        let settings = serde_json::from_str::<Settings>(
+            r#"{
+                "launchOnStartup": false,
+                "historyLimit": 100,
+                "retentionDays": 30
+            }"#,
+        )
+        .expect("legacy settings");
+
+        assert!(!settings.auto_sort_duplicates);
+        assert!(settings.minimize_on_close);
     }
 }

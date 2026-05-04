@@ -6,6 +6,7 @@ src-tauri/target/
 .vite/
 .idea/
 rules/
+docs/
 .vscode/
 *.log
 *.tmp

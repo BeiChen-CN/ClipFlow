@@ -23,6 +23,8 @@ const settings: Settings = {
   colorPreset: "teal",
   customColor: "#0d9488",
   motionPreset: "a",
+  autoSortDuplicates: false,
+  minimizeOnClose: true,
   windowPosition: "remember",
   copySound: false,
   searchBoxPosition: "top",

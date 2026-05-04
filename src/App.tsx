@@ -533,6 +533,8 @@ function applySettingsPatch(settings: Settings, patch: SettingsPatch): Settings 
     motionPreset: normalizeMotionPreset(patch.motionPreset)
       ?? normalizeMotionPreset(settings.motionPreset)
       ?? defaultSettings.motionPreset,
+    autoSortDuplicates: patch.autoSortDuplicates ?? settings.autoSortDuplicates ?? defaultSettings.autoSortDuplicates,
+    minimizeOnClose: patch.minimizeOnClose ?? settings.minimizeOnClose ?? defaultSettings.minimizeOnClose,
     panelPinned: patch.panelPinned !== undefined
       ? patch.panelPinned
       : settings.panelPinned,

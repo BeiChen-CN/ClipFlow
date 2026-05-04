@@ -20,6 +20,8 @@ export const defaultSettings: Settings = {
   colorPreset: "teal",
   customColor: "#0d9488",
   motionPreset: "a",
+  autoSortDuplicates: false,
+  minimizeOnClose: true,
   panelPinned: false,
   windowPosition: "remember",
   copySound: false,
