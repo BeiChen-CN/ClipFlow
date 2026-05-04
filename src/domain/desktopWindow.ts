@@ -23,13 +23,13 @@ export const DESKTOP_MIN_WINDOW_SIZE = {
 } as const satisfies DesktopWindowSize;
 
 export const CLIPBOARD_WINDOW_SIZE = {
-  width: 520,
-  height: 850
+  width: 525,
+  height: 865
 } as const satisfies DesktopWindowSize;
 
 export const SETTINGS_WINDOW_SIZE = {
-  width: 800,
-  height: 600
+  width: 1000,
+  height: 700
 } as const satisfies DesktopWindowSize;
 
 export const DESKTOP_WINDOW_BOUNDS_STORAGE_KEY = "clipflow.desktopWindowBounds.v1";

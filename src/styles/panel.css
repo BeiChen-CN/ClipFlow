@@ -32,23 +32,6 @@
     0 0 0 1px color-mix(in srgb, var(--accent), transparent 72%);
 }
 
-.clip-shell[data-edge-auto-hide="true"] {
-  border-right-color: color-mix(in srgb, var(--accent), var(--primary) 28%);
-}
-
-.edge-dock-indicator {
-  position: absolute;
-  z-index: 3;
-  top: 88px;
-  right: 0;
-  width: 6px;
-  height: 132px;
-  pointer-events: none;
-  background: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent), var(--primary) 24%));
-  border-radius: 999px 0 0 999px;
-  box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent), transparent 86%);
-}
-
 .desktop-runtime .clip-shell {
   height: 100vh;
   min-height: 100vh;

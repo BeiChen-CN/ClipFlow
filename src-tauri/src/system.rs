@@ -1,18 +1,24 @@
 use crate::app_state::AppState;
 use crate::error::ClipflowError;
-use crate::models::{Settings, SettingsPatch, SourceAppInfo, WindowPositionMode};
+use crate::models::{
+    ClipItem, ClipKind, Settings, SettingsPatch, SourceAppInfo, WindowPositionMode,
+};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
-use std::{error::Error, thread, time::Duration};
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
+use std::{error::Error, thread};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{App, AppHandle, Emitter, Manager, PhysicalPosition, Runtime, WebviewWindow};
+use tauri::{
+    App, AppHandle, Emitter, Manager, PhysicalPosition, Runtime, WebviewWindow, WindowEvent,
+};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 #[cfg(target_os = "windows")]
 use windows::core::{PCWSTR, PWSTR};
 #[cfg(target_os = "windows")]
-use windows::Win32::Foundation::CloseHandle;
+use windows::Win32::Foundation::{CloseHandle, HWND};
 #[cfg(target_os = "windows")]
 use windows::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS};
 #[cfg(target_os = "windows")]
@@ -25,15 +31,29 @@ use windows::Win32::System::Threading::{
     OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_FORMAT, PROCESS_QUERY_LIMITED_INFORMATION,
 };
 #[cfg(target_os = "windows")]
-use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
+use windows::Win32::UI::WindowsAndMessaging::{
+    GetForegroundWindow, GetWindowThreadProcessId, IsWindow, SetForegroundWindow,
+};
 
 pub const CLIPS_CHANGED_EVENT: &str = "clips-changed";
 pub const PANEL_SHOWN_EVENT: &str = "panel-shown";
 pub const SETTINGS_CHANGED_EVENT: &str = "settings-changed";
 const TRAY_ID: &str = "clipflow-tray";
+const CLIPBOARD_CAPTURE_SUPPRESSION_MS: u64 = 1_500;
+
+struct ClipboardSuppression {
+    signature: String,
+    expires_at: Instant,
+}
+
+static CLIPBOARD_WRITE_SUPPRESSION: OnceLock<Mutex<Option<ClipboardSuppression>>> = OnceLock::new();
+
+#[cfg(target_os = "windows")]
+static REMEMBERED_FOREGROUND_WINDOW: OnceLock<Mutex<Option<isize>>> = OnceLock::new();
 
 pub fn setup_app(app: &mut App) -> Result<(), Box<dyn Error>> {
     setup_tray(app)?;
+    setup_focus_loss_hide(app);
     register_stored_panel_hotkey(app.handle());
     apply_stored_panel_pin(app.handle());
     apply_stored_launch_on_startup(app.handle());
@@ -46,6 +66,7 @@ pub fn setup_app(app: &mut App) -> Result<(), Box<dyn Error>> {
 }
 
 pub fn show_panel<R: Runtime>(app: &AppHandle<R>) {
+    remember_foreground_window();
     if let Some(window) = app.get_webview_window("main") {
         let settings = read_settings(app);
         let _ = window.show();
@@ -87,6 +108,52 @@ pub fn hide_panel<R: Runtime>(app: &AppHandle<R>) {
     }
 }
 
+fn setup_focus_loss_hide(app: &mut App) {
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+
+    let app_handle = app.handle().clone();
+    window.on_window_event(move |event| {
+        if let WindowEvent::Focused(false) = event {
+            let app_for_thread = app_handle.clone();
+            let app_for_closure = app_handle.clone();
+            if let Err(error) = app_for_thread
+                .run_on_main_thread(move || hide_clipboard_panel_on_focus_loss(&app_for_closure))
+            {
+                eprintln!("failed to process panel focus loss: {error}");
+            }
+        }
+    });
+}
+
+fn hide_clipboard_panel_on_focus_loss<R: Runtime>(app: &AppHandle<R>) {
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    let Some(settings) = read_settings(app) else {
+        return;
+    };
+
+    if settings.panel_pinned || is_settings_route(&window) {
+        return;
+    }
+
+    let _ = window.hide();
+}
+
+pub fn prepare_paste_target<R: Runtime>(app: &AppHandle<R>) {
+    hide_panel(app);
+    let _ = restore_remembered_foreground_window();
+    thread::sleep(Duration::from_millis(90));
+}
+
+pub fn remember_app_clipboard_write(item: &ClipItem) {
+    if let Some(signature) = clipboard_signature_for_item(item) {
+        remember_clipboard_write_signature(signature);
+    }
+}
+
 pub fn register_panel_hotkey<R: Runtime>(
     app: &AppHandle<R>,
     value: &str,
@@ -96,13 +163,29 @@ pub fn register_panel_hotkey<R: Runtime>(
     registry
         .unregister_all()
         .map_err(to_shortcut_registration_error)?;
+    let shortcut_to_check = shortcut.clone();
     registry
         .on_shortcut(shortcut, |app, _shortcut, event| {
             if event.state == ShortcutState::Pressed {
-                show_panel(app);
+                show_panel_from_hotkey(app);
             }
         })
-        .map_err(to_shortcut_registration_error)
+        .map_err(to_shortcut_registration_error)?;
+    if !registry.is_registered(shortcut_to_check) {
+        return Err(ClipflowError::ShortcutRegistrationFailed(format!(
+            "shortcut '{value}' was not registered after registration"
+        )));
+    }
+
+    Ok(())
+}
+
+fn show_panel_from_hotkey<R: Runtime>(app: &AppHandle<R>) {
+    let app_for_thread = app.clone();
+    let app_for_closure = app.clone();
+    if let Err(error) = app_for_thread.run_on_main_thread(move || show_panel(&app_for_closure)) {
+        eprintln!("failed to show panel from hotkey on main thread: {error}");
+    }
 }
 
 fn setup_tray(app: &mut App) -> tauri::Result<()> {
@@ -147,7 +230,12 @@ fn register_stored_panel_hotkey<R: Runtime>(app: &AppHandle<R>) {
     let Some(settings) = read_settings(app) else {
         return;
     };
-    let _ = register_panel_hotkey(app, &settings.shortcuts.show_panel);
+    if let Err(error) = register_panel_hotkey(app, &settings.shortcuts.show_panel) {
+        eprintln!(
+            "failed to register panel hotkey '{}': {error}",
+            settings.shortcuts.show_panel
+        );
+    }
 }
 
 fn apply_stored_panel_pin<R: Runtime>(app: &AppHandle<R>) {
@@ -254,6 +342,49 @@ fn wide_bytes(value: &str) -> Vec<u8> {
         .collect()
 }
 
+#[cfg(target_os = "windows")]
+fn remembered_foreground_window_slot() -> &'static Mutex<Option<isize>> {
+    REMEMBERED_FOREGROUND_WINDOW.get_or_init(|| Mutex::new(None))
+}
+
+#[cfg(target_os = "windows")]
+fn remember_foreground_window() {
+    let hwnd = unsafe { GetForegroundWindow() };
+    if hwnd.0.is_null() {
+        return;
+    }
+
+    if let Ok(mut slot) = remembered_foreground_window_slot().lock() {
+        *slot = Some(hwnd.0 as isize);
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn remember_foreground_window() {}
+
+#[cfg(target_os = "windows")]
+fn restore_remembered_foreground_window() -> bool {
+    let raw_hwnd = remembered_foreground_window_slot()
+        .lock()
+        .ok()
+        .and_then(|slot| *slot);
+    let Some(raw_hwnd) = raw_hwnd else {
+        return false;
+    };
+    let hwnd = HWND(raw_hwnd as *mut std::ffi::c_void);
+
+    if !unsafe { IsWindow(hwnd).as_bool() } {
+        return false;
+    }
+
+    unsafe { SetForegroundWindow(hwnd).as_bool() }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn restore_remembered_foreground_window() -> bool {
+    false
+}
+
 fn read_settings<R: Runtime>(app: &AppHandle<R>) -> Option<Settings> {
     let state = app.state::<AppState>();
     let store = state.store.lock().ok()?;
@@ -272,6 +403,14 @@ fn position_panel<R: Runtime>(
         }
         _ => {}
     }
+}
+
+fn is_settings_route<R: Runtime>(window: &WebviewWindow<R>) -> bool {
+    let Ok(url) = window.url() else {
+        return false;
+    };
+    let path = url.path().trim_end_matches('/');
+    path == "/settings" || path.ends_with("/settings")
 }
 
 fn move_panel_to_cursor<R: Runtime>(app: &AppHandle<R>, window: &WebviewWindow<R>) {
@@ -340,6 +479,12 @@ fn start_edge_auto_hide_watcher<R: Runtime>(app: AppHandle<R>) {
                     .unwrap_or(false);
 
                 if !enabled {
+                    restore_hidden_edge(&window, &mut hidden_state);
+                    thread::sleep(Duration::from_millis(320));
+                    continue;
+                }
+
+                if is_settings_route(&window) {
                     restore_hidden_edge(&window, &mut hidden_state);
                     thread::sleep(Duration::from_millis(320));
                     continue;
@@ -495,8 +640,7 @@ fn start_clipboard_watcher<R: Runtime>(app: AppHandle<R>) {
                 if let Ok(paths) = clipboard.get().file_list() {
                     if !paths.is_empty() {
                         let signature = file_signature(&paths);
-                        if last_seen.as_deref() != Some(signature.as_str()) {
-                            last_seen = Some(signature);
+                        if should_capture_clipboard_signature(&mut last_seen, signature) {
                             capture_clipboard_files(&app, &paths, source.clone());
                         }
                         thread::sleep(Duration::from_millis(750));
@@ -507,8 +651,7 @@ fn start_clipboard_watcher<R: Runtime>(app: AppHandle<R>) {
                 if let Ok(image) = clipboard.get_image() {
                     let signature =
                         image_signature(image.width, image.height, image.bytes.as_ref());
-                    if last_seen.as_deref() != Some(signature.as_str()) {
-                        last_seen = Some(signature);
+                    if should_capture_clipboard_signature(&mut last_seen, signature) {
                         capture_clipboard_image(
                             &app,
                             image.width as u32,
@@ -526,8 +669,7 @@ fn start_clipboard_watcher<R: Runtime>(app: AppHandle<R>) {
                         .get_text()
                         .unwrap_or_else(|_| plain_text_from_html(&html));
                     let signature = format!("rich:{text}:{html}");
-                    if last_seen.as_deref() != Some(signature.as_str()) {
-                        last_seen = Some(signature);
+                    if should_capture_clipboard_signature(&mut last_seen, signature) {
                         capture_clipboard_rich_text(&app, &text, &html, source.clone());
                     }
                     thread::sleep(Duration::from_millis(750));
@@ -536,8 +678,7 @@ fn start_clipboard_watcher<R: Runtime>(app: AppHandle<R>) {
 
                 if let Ok(text) = clipboard.get_text() {
                     let signature = format!("text:{text}");
-                    if last_seen.as_deref() != Some(signature.as_str()) {
-                        last_seen = Some(signature);
+                    if should_capture_clipboard_signature(&mut last_seen, signature) {
                         capture_clipboard_text(&app, &text, source);
                     }
                 }
@@ -546,6 +687,81 @@ fn start_clipboard_watcher<R: Runtime>(app: AppHandle<R>) {
             thread::sleep(Duration::from_millis(750));
         }
     });
+}
+
+fn should_capture_clipboard_signature(last_seen: &mut Option<String>, signature: String) -> bool {
+    let is_repeat = last_seen.as_deref() == Some(signature.as_str());
+    *last_seen = Some(signature.clone());
+    !is_repeat && !should_suppress_clipboard_capture(&signature)
+}
+
+fn clipboard_suppression_slot() -> &'static Mutex<Option<ClipboardSuppression>> {
+    CLIPBOARD_WRITE_SUPPRESSION.get_or_init(|| Mutex::new(None))
+}
+
+fn remember_clipboard_write_signature(signature: String) {
+    if let Ok(mut slot) = clipboard_suppression_slot().lock() {
+        *slot = Some(ClipboardSuppression {
+            signature,
+            expires_at: Instant::now() + Duration::from_millis(CLIPBOARD_CAPTURE_SUPPRESSION_MS),
+        });
+    }
+}
+
+fn should_suppress_clipboard_capture(signature: &str) -> bool {
+    let Ok(mut slot) = clipboard_suppression_slot().lock() else {
+        return false;
+    };
+
+    let Some(state) = slot.as_ref() else {
+        return false;
+    };
+
+    if Instant::now() >= state.expires_at {
+        *slot = None;
+        return false;
+    }
+
+    if state.signature == signature {
+        *slot = None;
+        return true;
+    }
+
+    false
+}
+
+#[cfg(test)]
+fn reset_clipboard_capture_suppression_for_test() {
+    if let Ok(mut slot) = clipboard_suppression_slot().lock() {
+        *slot = None;
+    }
+}
+
+fn clipboard_signature_for_item(item: &ClipItem) -> Option<String> {
+    match item.kind {
+        ClipKind::Image => Some(image_signature(
+            item.image_width? as usize,
+            item.image_height? as usize,
+            item.image_bytes.as_ref()?,
+        )),
+        ClipKind::File => {
+            let paths = item
+                .file_paths
+                .iter()
+                .map(PathBuf::from)
+                .collect::<Vec<_>>();
+            if paths.is_empty() {
+                Some(format!("text:{}", item.text))
+            } else {
+                Some(file_signature(&paths))
+            }
+        }
+        ClipKind::RichText => item
+            .rich_html
+            .as_ref()
+            .map(|html| format!("rich:{}:{html}", item.text)),
+        _ => Some(format!("text:{}", item.text)),
+    }
 }
 
 fn capture_clipboard_image<R: Runtime>(
@@ -760,4 +976,19 @@ fn parse_shortcut(value: &str) -> Result<Shortcut, ClipflowError> {
 
 fn to_shortcut_registration_error(error: tauri_plugin_global_shortcut::Error) -> ClipflowError {
     ClipflowError::ShortcutRegistrationFailed(error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn suppresses_app_owned_clipboard_signature_until_consumed() {
+        reset_clipboard_capture_suppression_for_test();
+
+        remember_clipboard_write_signature("text:hello".to_string());
+
+        assert!(should_suppress_clipboard_capture("text:hello"));
+        assert!(!should_suppress_clipboard_capture("text:world"));
+    }
 }

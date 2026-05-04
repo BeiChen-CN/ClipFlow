@@ -355,7 +355,6 @@ export function SearchPanel({
       transition={clipboardPanelMotion.transition}
       onKeyDown={handleKeyDown}
     >
-      {settings.edgeAutoHide ? <motion.span className="edge-dock-indicator" aria-hidden="true" layout /> : null}
       <motion.header
         className="panel-header"
         initial={layerInitial}

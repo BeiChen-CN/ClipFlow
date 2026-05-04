@@ -16,8 +16,8 @@ describe("desktop window sizing", () => {
   });
 
   it("uses compact clipboard and settings route defaults", () => {
-    expect(CLIPBOARD_WINDOW_SIZE).toEqual({ width: 520, height: 850 });
-    expect(SETTINGS_WINDOW_SIZE).toEqual({ width: 800, height: 600 });
+    expect(CLIPBOARD_WINDOW_SIZE).toEqual({ width: 525, height: 865 });
+    expect(SETTINGS_WINDOW_SIZE).toEqual({ width: 1000, height: 700 });
     expect(DESKTOP_MIN_WINDOW_SIZE.width).toBeLessThanOrEqual(CLIPBOARD_WINDOW_SIZE.width);
     expect(resolveDesktopWindowSize("clipboard")).toEqual(CLIPBOARD_WINDOW_SIZE);
     expect(resolveDesktopWindowSize("settings")).toEqual(SETTINGS_WINDOW_SIZE);

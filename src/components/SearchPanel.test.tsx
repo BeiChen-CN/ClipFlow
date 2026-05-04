@@ -135,6 +135,20 @@ describe("SearchPanel", () => {
     expect(screen.queryByText("历史已刷新")).not.toBeInTheDocument();
   });
 
+  it("does not render a visible edge auto-hide indicator", () => {
+    const { container } = render(
+      <SearchPanel
+        clips={clips}
+        settings={{ ...settings, edgeAutoHide: true }}
+        onCopyClip={vi.fn()}
+        onDeleteClip={vi.fn()}
+        onPasteClip={vi.fn()}
+      />
+    );
+
+    expect(container.querySelector(".edge-dock-indicator")).toBeNull();
+  });
+
   it("shows the copied time in clip metadata", () => {
     render(
       <SearchPanel

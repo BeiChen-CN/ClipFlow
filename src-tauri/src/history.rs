@@ -12,6 +12,11 @@ pub struct ClipStore {
 
 const CLIP_COLUMNS: &str = "id, text, preview, kind, content_hash, created_at, last_used_at, use_count, image_width, image_height, file_count, file_paths, image_bytes, is_favorite, source_app_name, source_app_icon, source_app_path, rich_html, deleted_at";
 
+struct ExistingClip {
+    id: String,
+    deleted_at: Option<String>,
+}
+
 impl ClipStore {
     pub fn open(path: impl AsRef<Path>) -> Result<Self, ClipflowError> {
         let conn = Connection::open(path)?;
@@ -55,16 +60,17 @@ impl ClipStore {
         };
         let file_count = optional_count(file_paths.len());
         let hash = content_hash(&format!("{}:{normalized}", kind_to_db(kind)));
-        let existing_id = self
-            .conn
-            .query_row(
-                "SELECT id FROM clips WHERE content_hash = ?1",
-                params![hash],
-                |row| row.get::<_, String>(0),
-            )
-            .optional()?;
+        let existing = self.existing_clip_by_hash(&hash)?;
+        if existing
+            .as_ref()
+            .is_some_and(|clip| clip.deleted_at.is_none())
+        {
+            return Ok(None);
+        }
 
-        let id = existing_id.unwrap_or_else(|| Uuid::new_v4().to_string());
+        let id = existing
+            .map(|clip| clip.id)
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
         self.conn.execute(
             "INSERT INTO clips (
                 id, text, preview, kind, content_hash, created_at, last_used_at, use_count,
@@ -75,7 +81,6 @@ impl ClipStore {
                 text = excluded.text,
                 preview = excluded.preview,
                 kind = excluded.kind,
-                created_at = excluded.created_at,
                 image_width = excluded.image_width,
                 image_height = excluded.image_height,
                 file_count = excluded.file_count,
@@ -123,8 +128,16 @@ impl ClipStore {
 
         let now = now();
         let hash = content_hash(&format!("rich:{normalized}:{rich_html}"));
-        let id = self
-            .existing_id_by_hash(&hash)?
+        let existing = self.existing_clip_by_hash(&hash)?;
+        if existing
+            .as_ref()
+            .is_some_and(|clip| clip.deleted_at.is_none())
+        {
+            return Ok(None);
+        }
+
+        let id = existing
+            .map(|clip| clip.id)
             .unwrap_or_else(|| Uuid::new_v4().to_string());
 
         self.conn.execute(
@@ -137,7 +150,6 @@ impl ClipStore {
                 text = excluded.text,
                 preview = excluded.preview,
                 kind = excluded.kind,
-                created_at = excluded.created_at,
                 source_app_name = excluded.source_app_name,
                 source_app_icon = excluded.source_app_icon,
                 source_app_path = excluded.source_app_path,
@@ -183,8 +195,16 @@ impl ClipStore {
         let now = now();
         let text = format!("图片 {width} × {height}");
         let hash = content_hash_bytes("image", width, height, &bytes);
-        let id = self
-            .existing_id_by_hash(&hash)?
+        let existing = self.existing_clip_by_hash(&hash)?;
+        if existing
+            .as_ref()
+            .is_some_and(|clip| clip.deleted_at.is_none())
+        {
+            return Ok(None);
+        }
+
+        let id = existing
+            .map(|clip| clip.id)
             .unwrap_or_else(|| Uuid::new_v4().to_string());
 
         self.conn.execute(
@@ -197,7 +217,6 @@ impl ClipStore {
                 text = excluded.text,
                 preview = excluded.preview,
                 kind = excluded.kind,
-                created_at = excluded.created_at,
                 image_width = excluded.image_width,
                 image_height = excluded.image_height,
                 file_count = excluded.file_count,
@@ -253,8 +272,16 @@ impl ClipStore {
         let text = file_paths.join("\n");
         let preview = file_preview(&file_paths);
         let hash = content_hash(&format!("file:{}", file_paths.join("\n")));
-        let id = self
-            .existing_id_by_hash(&hash)?
+        let existing = self.existing_clip_by_hash(&hash)?;
+        if existing
+            .as_ref()
+            .is_some_and(|clip| clip.deleted_at.is_none())
+        {
+            return Ok(None);
+        }
+
+        let id = existing
+            .map(|clip| clip.id)
             .unwrap_or_else(|| Uuid::new_v4().to_string());
 
         self.conn.execute(
@@ -267,7 +294,6 @@ impl ClipStore {
                 text = excluded.text,
                 preview = excluded.preview,
                 kind = excluded.kind,
-                created_at = excluded.created_at,
                 image_width = excluded.image_width,
                 image_height = excluded.image_height,
                 file_count = excluded.file_count,
@@ -703,12 +729,17 @@ impl ClipStore {
             .map_err(ClipflowError::from)
     }
 
-    fn existing_id_by_hash(&self, hash: &str) -> Result<Option<String>, ClipflowError> {
+    fn existing_clip_by_hash(&self, hash: &str) -> Result<Option<ExistingClip>, ClipflowError> {
         self.conn
             .query_row(
-                "SELECT id FROM clips WHERE content_hash = ?1",
+                "SELECT id, deleted_at FROM clips WHERE content_hash = ?1",
                 params![hash],
-                |row| row.get::<_, String>(0),
+                |row| {
+                    Ok(ExistingClip {
+                        id: row.get(0)?,
+                        deleted_at: row.get(1)?,
+                    })
+                },
             )
             .optional()
             .map_err(ClipflowError::from)
@@ -964,14 +995,59 @@ mod tests {
         let mut store = ClipStore::in_memory().expect("store");
 
         let first = store.add_text("hello world").expect("first").expect("item");
-        let second = store
-            .add_text(" hello   world ")
-            .expect("second")
-            .expect("item");
+        let second = store.add_text(" hello   world ").expect("second");
         let items = store.list(None, ClipFilter::All).expect("list");
 
-        assert_eq!(first.id, second.id);
+        assert!(second.is_none());
         assert_eq!(1, items.len());
+        assert_eq!(first.id, items[0].id);
+    }
+
+    #[test]
+    fn duplicate_active_text_preserves_original_created_at_and_does_not_reinsert() {
+        let mut store = ClipStore::in_memory().expect("store");
+
+        let first = store.add_text("hello world").expect("first").expect("item");
+        store
+            .conn
+            .execute(
+                "UPDATE clips SET created_at = ?1 WHERE id = ?2",
+                params!["2026-05-02T10:00:00.000Z", first.id],
+            )
+            .expect("set created_at");
+
+        let duplicate = store.add_text(" hello   world ").expect("duplicate");
+        let items = store.list(None, ClipFilter::All).expect("list");
+
+        assert!(duplicate.is_none());
+        assert_eq!(1, items.len());
+        assert_eq!("2026-05-02T10:00:00.000Z", items[0].created_at);
+    }
+
+    #[test]
+    fn duplicate_deleted_text_restores_existing_clip_without_creating_another_row() {
+        let mut store = ClipStore::in_memory().expect("store");
+
+        let first = store.add_text("restore me").expect("first").expect("item");
+        store
+            .conn
+            .execute(
+                "UPDATE clips SET created_at = ?1 WHERE id = ?2",
+                params!["2026-05-02T10:00:00.000Z", first.id],
+            )
+            .expect("set created_at");
+        store.delete(&first.id).expect("delete");
+
+        let restored = store
+            .add_text("restore me")
+            .expect("restore")
+            .expect("item");
+        let items = store.list(None, ClipFilter::All).expect("active list");
+
+        assert_eq!(first.id, restored.id);
+        assert_eq!(1, items.len());
+        assert_eq!("2026-05-02T10:00:00.000Z", restored.created_at);
+        assert!(restored.deleted_at.is_none());
     }
 
     #[test]
@@ -1051,7 +1127,10 @@ mod tests {
             .expect("settings");
 
         assert_eq!(1, settings.trash_retention_days);
-        assert!(store.list(None, ClipFilter::Trash).expect("trash").is_empty());
+        assert!(store
+            .list(None, ClipFilter::Trash)
+            .expect("trash")
+            .is_empty());
     }
 
     #[test]
@@ -1066,7 +1145,13 @@ mod tests {
             .expect("settings");
 
         assert_eq!(30, settings.trash_retention_days);
-        assert_eq!(30, store.settings().expect("stored settings").trash_retention_days);
+        assert_eq!(
+            30,
+            store
+                .settings()
+                .expect("stored settings")
+                .trash_retention_days
+        );
     }
 
     #[test]

@@ -49,19 +49,21 @@ export type RouteDirection = "toSettings" | "toClipboard";
 export const routeVariants = {
   initial: (direction: RouteDirection) => ({
     opacity: 0,
-    x: direction === "toSettings" ? 24 : -24
+    x: direction === "toSettings" ? 12 : -12,
+    scale: 0.985
   }),
-  animate: { opacity: 1, x: 0 },
+  animate: { opacity: 1, x: 0, scale: 1 },
   exit: (direction: RouteDirection) => ({
     opacity: 0,
-    x: direction === "toSettings" ? -18 : 18
+    x: direction === "toSettings" ? -12 : 12,
+    scale: 0.992
   })
 };
 
 export const routeTransition = {
   type: "tween" as const,
   duration: 0.26,
-  ease: md3Ease
+  ease: md3ExpressiveEase
 };
 
 export const settingsSectionVariants = {

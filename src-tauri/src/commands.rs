@@ -91,12 +91,16 @@ pub fn paste_clip(
     state: State<'_, AppState>,
     id: String,
 ) -> Result<ClipItem, CommandError> {
-    let mut store = state
-        .store
-        .lock()
-        .map_err(|_| ClipflowError::StatePoisoned)?;
-    let item = store.mark_used(&id).map_err(CommandError::from)?;
+    let item = {
+        let mut store = state
+            .store
+            .lock()
+            .map_err(|_| ClipflowError::StatePoisoned)?;
+        store.mark_used(&id).map_err(CommandError::from)?
+    };
     write_clipboard_item(&item).map_err(CommandError::from)?;
+    system::remember_app_clipboard_write(&item);
+    system::prepare_paste_target(&app);
     paste::send_ctrl_v().map_err(CommandError::from)?;
     let _ = app.emit(system::CLIPS_CHANGED_EVENT, ());
 
@@ -109,12 +113,15 @@ pub fn copy_clip(
     state: State<'_, AppState>,
     id: String,
 ) -> Result<ClipItem, CommandError> {
-    let mut store = state
-        .store
-        .lock()
-        .map_err(|_| ClipflowError::StatePoisoned)?;
-    let item = store.mark_used(&id).map_err(CommandError::from)?;
+    let item = {
+        let mut store = state
+            .store
+            .lock()
+            .map_err(|_| ClipflowError::StatePoisoned)?;
+        store.mark_used(&id).map_err(CommandError::from)?
+    };
     write_clipboard_item(&item).map_err(CommandError::from)?;
+    system::remember_app_clipboard_write(&item);
     let _ = app.emit(system::CLIPS_CHANGED_EVENT, ());
     Ok(item)
 }
@@ -232,26 +239,54 @@ pub fn update_settings(
     state: State<'_, AppState>,
     patch: SettingsPatch,
 ) -> Result<Settings, CommandError> {
-    let updates_panel_hotkey = patch.hotkey.is_some()
-        || patch
-            .shortcuts
-            .as_ref()
-            .and_then(|shortcuts| shortcuts.show_panel.as_ref())
-            .is_some();
+    let requested_panel_hotkey = patch
+        .shortcuts
+        .as_ref()
+        .and_then(|shortcuts| shortcuts.show_panel.as_ref())
+        .or(patch.hotkey.as_ref())
+        .cloned();
     let updates_panel_pin = patch.panel_pinned.is_some();
     let updates_launch_on_startup = patch.launch_on_startup.is_some();
     let updates_tray_icon = patch.show_tray_icon.is_some();
     let updates_taskbar_icon = patch.show_taskbar_icon.is_some();
+    let previous_panel_hotkey = if requested_panel_hotkey.is_some() {
+        let store = state
+            .store
+            .lock()
+            .map_err(|_| ClipflowError::StatePoisoned)?;
+        Some(
+            store
+                .settings()
+                .map_err(CommandError::from)?
+                .shortcuts
+                .show_panel,
+        )
+    } else {
+        None
+    };
+    if let Some(shortcut) = requested_panel_hotkey.as_ref() {
+        if let Err(error) = system::register_panel_hotkey(&app, shortcut) {
+            if let Some(previous) = previous_panel_hotkey.as_ref() {
+                let _ = system::register_panel_hotkey(&app, previous);
+            }
+            return Err(CommandError::from(error));
+        }
+    }
     let mut store = state
         .store
         .lock()
         .map_err(|_| ClipflowError::StatePoisoned)?;
-    let settings = store.update_settings(patch).map_err(CommandError::from)?;
+    let settings = match store.update_settings(patch) {
+        Ok(settings) => settings,
+        Err(error) => {
+            drop(store);
+            if let Some(previous) = previous_panel_hotkey.as_ref() {
+                let _ = system::register_panel_hotkey(&app, previous);
+            }
+            return Err(CommandError::from(error));
+        }
+    };
     drop(store);
-    if updates_panel_hotkey {
-        system::register_panel_hotkey(&app, &settings.shortcuts.show_panel)
-            .map_err(CommandError::from)?;
-    }
     if updates_panel_pin {
         system::apply_panel_pinned(&app, settings.panel_pinned);
     }

@@ -5,6 +5,7 @@ target/
 src-tauri/target/
 .vite/
 .idea/
+rules/
 .vscode/
 *.log
 *.tmp
@@ -15,3 +16,4 @@ src-tauri/target/
 artifacts/
 .ace-tool/
 .codex/environments/environment.toml
+AGENTS.md
