@@ -47,6 +47,12 @@ struct ClipboardSuppression {
     expires_at: Instant,
 }
 
+#[derive(Debug, Eq, PartialEq)]
+enum PanelHotkeyAction {
+    Show,
+    Hide,
+}
+
 static CLIPBOARD_WRITE_SUPPRESSION: OnceLock<Mutex<Option<ClipboardSuppression>>> = OnceLock::new();
 static FOCUS_LOSS_HIDE_SUPPRESSION: OnceLock<Mutex<Option<Instant>>> = OnceLock::new();
 
@@ -214,8 +220,31 @@ pub fn register_panel_hotkey<R: Runtime>(
 fn show_panel_from_hotkey<R: Runtime>(app: &AppHandle<R>) {
     let app_for_thread = app.clone();
     let app_for_closure = app.clone();
-    if let Err(error) = app_for_thread.run_on_main_thread(move || show_panel(&app_for_closure)) {
-        eprintln!("failed to show panel from hotkey on main thread: {error}");
+    if let Err(error) =
+        app_for_thread.run_on_main_thread(move || toggle_panel_from_hotkey(&app_for_closure))
+    {
+        eprintln!("failed to toggle panel from hotkey on main thread: {error}");
+    }
+}
+
+fn toggle_panel_from_hotkey<R: Runtime>(app: &AppHandle<R>) {
+    let action = app
+        .get_webview_window("main")
+        .and_then(|window| window.is_visible().ok())
+        .map(panel_hotkey_action)
+        .unwrap_or(PanelHotkeyAction::Show);
+
+    match action {
+        PanelHotkeyAction::Show => show_panel(app),
+        PanelHotkeyAction::Hide => hide_panel(app),
+    }
+}
+
+fn panel_hotkey_action(window_visible: bool) -> PanelHotkeyAction {
+    if window_visible {
+        PanelHotkeyAction::Hide
+    } else {
+        PanelHotkeyAction::Show
     }
 }
 
@@ -1068,5 +1097,11 @@ mod tests {
         remember_focus_loss_hide_suppression_until(Instant::now() - Duration::from_millis(1));
 
         assert!(!consume_focus_loss_hide_suppression());
+    }
+
+    #[test]
+    fn panel_hotkey_toggles_based_on_current_visibility() {
+        assert_eq!(PanelHotkeyAction::Hide, panel_hotkey_action(true));
+        assert_eq!(PanelHotkeyAction::Show, panel_hotkey_action(false));
     }
 }
